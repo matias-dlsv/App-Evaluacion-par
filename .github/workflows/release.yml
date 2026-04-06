@@ -1,0 +1,43 @@
+name: Release
+on:
+  push:
+    tags:
+      - "v*" # Se ejecutará cada vez que subas un tag que empiece con 'v' (ej: v1.0.0)
+  workflow_dispatch: # Permite ejecutarlo manualmente desde GitHub
+
+jobs:
+  release:
+    permissions:
+      contents: write # IMPORTANTE: Permite a GitHub Actions subir el .exe
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [windows-latest] # Aquí le decimos que compile en Windows
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Instalar dependencias de Node.js
+        # Cambia pnpm por npm o yarn dependiendo de lo que uses en tu proyecto
+        run: npm install
+
+      - name: Instalar Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cachear Rust para que compile más rápido
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Construir y crear el Release con Tauri
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: app-v__VERSION__ # Toma la versión de tu tauri.conf.json
+          releaseName: "App v__VERSION__"
+          releaseBody: "Mira los cambios en esta nueva versión."
+          releaseDraft: true
+          prerelease: false
