@@ -1,0 +1,23 @@
+[package]
+name = "dio"
+version = "0.1.0"
+description = "App para evaluaciones pares"
+authors = ["you"]
+edition = "2021"
+default-run = "dio"
+
+[lib]
+name = "dio_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri-plugin-fs = "2"
+calamine = "0.33.0"
+tauri-plugin-dialog = "2"
