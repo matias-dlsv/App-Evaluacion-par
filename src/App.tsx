@@ -46,11 +46,14 @@ function App() {
   const [cursoActivo, setCursoActivo] = useState<Curso | null>(null);
   const [nombreCurso, setNombreCurso] = useState("");
   const [estadoCarga, setEstadoCarga] = useState("");
-  // notasBrutas indexed by cursoId -> grupoNumero -> value
   const [notasBrutas, setNotasBrutas] = useState<
     Record<string, Record<string, string>>
   >({});
   const [config, setConfig] = useState<ConfigDescuentos>(DEFAULT_DESCUENTOS);
+  // Track which groups are expanded: Record<cursoId, Set<grupoNumero>>
+  const [gruposExpandidos, setGruposExpandidos] = useState<
+    Record<string, Set<string>>
+  >({});
 
   const crearCurso = async () => {
     if (!nombreCurso.trim()) return setEstadoCarga("Ingresa un nombre.");
@@ -105,7 +108,6 @@ function App() {
     const cursoData =
       cursos.find((c) => c.id === cursoActivo.id) || cursoActivo;
 
-    // Use only this course's notas brutas
     const notasCurso = notasBrutas[cursoData.id] ?? {};
 
     const gruposActualizados = cursoData.grupos.map((grupo) => {
@@ -123,6 +125,35 @@ function App() {
     actualizarCurso(cursoFinal);
     setCursoActivo(cursoFinal);
   };
+
+  // Toggle a single group
+  const toggleGrupo = (cursoId: string, grupoNumero: string) => {
+    setGruposExpandidos((prev) => {
+      const set = new Set(prev[cursoId] ?? []);
+      if (set.has(grupoNumero)) {
+        set.delete(grupoNumero);
+      } else {
+        set.add(grupoNumero);
+      }
+      return { ...prev, [cursoId]: set };
+    });
+  };
+
+  // Expand or collapse all groups for a course
+  const toggleTodos = (cursoId: string, grupos: Grupo[], expandir: boolean) => {
+    setGruposExpandidos((prev) => ({
+      ...prev,
+      [cursoId]: expandir
+        ? new Set(grupos.map((g) => g.numero))
+        : new Set<string>(),
+    }));
+  };
+
+  const estaExpandido = (cursoId: string, grupoNumero: string) =>
+    gruposExpandidos[cursoId]?.has(grupoNumero) ?? false;
+
+  const todosExpandidos = (cursoId: string, grupos: Grupo[]) =>
+    grupos.every((g) => gruposExpandidos[cursoId]?.has(g.numero));
 
   const estudiantesDuplicados = (() => {
     if (!cursoActivo) return new Set<string>();
@@ -145,7 +176,6 @@ function App() {
     const cursoData =
       cursos.find((c) => c.id === cursoActivo.id) || cursoActivo;
 
-    // Helper to get/set notas for the active course only
     const notasCurso = notasBrutas[cursoData.id] ?? {};
     const setNotaCurso = (grupoNumero: string, valor: string) =>
       setNotasBrutas((prev) => ({
@@ -156,10 +186,12 @@ function App() {
         },
       }));
 
+    const allExpanded = todosExpandidos(cursoData.id, cursoData.grupos);
+
     return (
       <div className="min-h-screen bg-gray-50 p-8">
         <div className="max-w-6xl mx-auto">
-          {/* Top bar with Uniandes branding */}
+          {/* Top bar */}
           <div className="flex items-center gap-3 mb-6">
             <button
               onClick={() => setCursoActivo(null)}
@@ -272,194 +304,228 @@ function App() {
             </div>
           </div>
 
-          {/* Notas brutas */}
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 mb-8">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-bold text-[#1a56a0]">
-                Notas brutas por grupo
-              </h2>
-              <button
-                onClick={aplicarNotasBrutas}
-                className="px-4 py-2 bg-[#1a56a0] text-white font-semibold rounded hover:bg-[#1e40af] transition cursor-pointer text-sm"
-              >
-                Calcular notas finales
-              </button>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-              {cursoData.grupos.map((grupo) => (
-                <div key={grupo.numero} className="flex flex-col gap-1">
-                  <label className="text-xs font-semibold text-gray-500">
-                    Grupo {grupo.numero}
-                  </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="1"
-                    max="7"
-                    value={
-                      notasCurso[grupo.numero] ?? grupo.promedio_bruto ?? ""
-                    }
-                    onChange={(e) => setNotaCurso(grupo.numero, e.target.value)}
-                    className="p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none"
-                  />
-                </div>
-              ))}
-            </div>
+          {/* Toolbar: Calcular + Expandir/Colapsar */}
+          <div className="flex justify-between items-center mb-4">
+            <button
+              onClick={() =>
+                toggleTodos(cursoData.id, cursoData.grupos, !allExpanded)
+              }
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-600 font-medium rounded-lg hover:bg-gray-50 hover:border-gray-400 transition text-sm shadow-sm cursor-pointer"
+            >
+              <span>{allExpanded ? "⊟" : "⊞"}</span>
+              {allExpanded ? "Colapsar todos" : "Expandir todos"}
+            </button>
+
+            <button
+              onClick={aplicarNotasBrutas}
+              className="px-5 py-2 bg-[#1a56a0] text-white font-semibold rounded-lg hover:bg-[#1e40af] transition cursor-pointer text-sm shadow"
+            >
+              Calcular notas finales
+            </button>
           </div>
 
-          {/* Grilla de grupos */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-            {cursoData.grupos.map((grupo) => (
-              <div
-                key={grupo.numero}
-                className="bg-white p-5 rounded-xl shadow border border-gray-100 flex flex-col"
-              >
-                <div className="flex justify-between items-center mb-3 border-b pb-2">
-                  <h4 className="font-bold text-lg text-[#1a56a0]">
-                    Grupo {grupo.numero}
-                  </h4>
-                  <span className="text-[10px] uppercase tracking-wider font-semibold text-gray-400">
-                    {grupo.estudiantes.length} integrantes
-                  </span>
-                </div>
-
-                <div className="flex flex-col gap-3">
-                  {grupo.estudiantes.map((est, idx) => (
-                    <div
-                      key={idx}
-                      className={`flex flex-col p-3 rounded-lg border ${
-                        est.gruposDuplicados
-                          ? "border-yellow-400 bg-yellow-50"
-                          : "bg-gray-50 border-gray-100"
+          {/* Grilla de grupos — con nota bruta en encabezado y contenido desplegable */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+            {cursoData.grupos.map((grupo) => {
+              const expandido = estaExpandido(cursoData.id, grupo.numero);
+              return (
+                <div
+                  key={grupo.numero}
+                  className="bg-white rounded-xl shadow border border-gray-100 flex flex-col overflow-hidden"
+                >
+                  {/* ── Encabezado del grupo (siempre visible) ── */}
+                  <div
+                    className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 cursor-pointer select-none hover:bg-blue-50 transition-colors"
+                    onClick={() => toggleGrupo(cursoData.id, grupo.numero)}
+                  >
+                    {/* Chevron */}
+                    <span
+                      className={`text-[#1a56a0] text-sm font-bold transition-transform duration-200 ${
+                        expandido ? "rotate-90" : "rotate-0"
                       }`}
+                      style={{ display: "inline-block" }}
                     >
-                      {/* Nombre */}
-                      <div className="mb-2">
-                        <span
-                          className="text-sm font-medium text-gray-700 truncate block"
-                          title={est.identificacion}
-                        >
-                          {est.identificacion}
-                          {est.gruposDuplicados && (
-                            <span className="ml-2 text-yellow-600 text-xs font-bold">
-                              ⚠ duplicado
-                            </span>
-                          )}
-                        </span>
-                      </div>
+                      ▶
+                    </span>
 
-                      {/* Notas */}
-                      <div className="flex gap-2 flex-wrap">
-                        {/* Bruta */}
-                        <div className="flex flex-col items-center">
-                          <span className="text-[9px] text-blue-500 font-bold uppercase">
-                            Bruta
-                          </span>
-                          <span className="font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded text-xs border border-blue-100">
-                            {grupo.promedio_bruto ?? "—"}
-                          </span>
-                        </div>
+                    {/* Título */}
+                    <h4 className="font-bold text-base text-[#1a56a0] flex-1">
+                      Grupo {grupo.numero}
+                    </h4>
 
-                        {/* Par */}
-                        <div className="flex flex-col items-center">
-                          <span className="text-[9px] text-green-600 font-bold uppercase">
-                            Par
-                          </span>
-                          {est.notaPar !== undefined ? (
-                            <span className="font-bold text-green-700 bg-green-100 px-2 py-0.5 rounded text-xs border border-green-200">
-                              {est.notaPar}
-                            </span>
-                          ) : (
-                            <span className="text-xs text-gray-400 italic px-2 py-0.5">
-                              ...
-                            </span>
-                          )}
-                        </div>
+                    {/* Badge integrantes */}
+                    <span className="text-[10px] uppercase tracking-wider font-semibold text-gray-400 mr-2">
+                      {grupo.estudiantes.length} int.
+                    </span>
 
-                        {/* Final sin castigo */}
-                        <div className="flex flex-col items-center">
-                          <span className="text-[9px] text-blue-600 font-bold uppercase">
-                            Final
-                          </span>
-                          {est.notaAjustada !== undefined ? (
-                            <span className="font-bold text-white bg-[#1a56a0] px-2 py-0.5 rounded text-xs shadow-sm">
-                              {est.notaAjustada}
-                            </span>
-                          ) : (
-                            <span className="text-xs text-gray-400 italic px-2 py-0.5">
-                              ...
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Castigo */}
-                        <div className="flex flex-col items-center">
-                          <span className="text-[9px] text-red-500 font-bold uppercase">
-                            Castigo
-                          </span>
-                          {est.factorCastigoTotal !== undefined ? (
-                            <span
-                              className={`font-bold px-2 py-0.5 rounded text-xs border ${
-                                est.factorCastigoTotal > 0
-                                  ? "text-red-700 bg-red-50 border-red-200"
-                                  : "text-gray-400 bg-gray-50 border-gray-100"
-                              }`}
-                              title={`Fuera de grupo: -${(est.factorCastigoFueraGrupo! * 100).toFixed(1)}% | No evaluó: -${(est.factorCastigoNoEvaluo! * 100).toFixed(1)}%`}
-                            >
-                              {est.factorCastigoTotal > 0
-                                ? `-${(est.factorCastigoTotal * 100).toFixed(1)}%`
-                                : "0%"}
-                            </span>
-                          ) : (
-                            <span className="text-xs text-gray-400 italic px-2 py-0.5">
-                              ...
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Nota con castigo */}
-                        <div className="flex flex-col items-center border-l pl-2 border-gray-200">
-                          <span className="text-[9px] text-gray-700 font-bold uppercase">
-                            c/castigo
-                          </span>
-                          {est.notaConDescuento !== undefined ? (
-                            <span className="font-bold text-white bg-gray-700 px-2 py-0.5 rounded text-xs shadow-sm">
-                              {est.notaConDescuento}
-                            </span>
-                          ) : (
-                            <span className="text-xs text-gray-400 italic px-2 py-0.5">
-                              ...
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Detalle castigo */}
-                      {est.factorCastigoTotal !== undefined &&
-                        est.factorCastigoTotal > 0 && (
-                          <div className="mt-2 text-[10px] text-red-500 flex gap-3 flex-wrap">
-                            {est.factorCastigoFueraGrupo! > 0 && (
-                              <span>
-                                X Fuera de grupo: -
-                                {(est.factorCastigoFueraGrupo! * 100).toFixed(
-                                  1,
-                                )}
-                                %
-                              </span>
-                            )}
-                            {est.factorCastigoNoEvaluo! > 0 && (
-                              <span>
-                                X No evaluó: -
-                                {(est.factorCastigoNoEvaluo! * 100).toFixed(1)}%
-                              </span>
-                            )}
-                          </div>
-                        )}
+                    {/* Input nota bruta — detiene propagación para no colapsar al escribir */}
+                    <div
+                      className="flex items-center gap-1.5"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <label className="text-[10px] font-bold text-blue-500 uppercase whitespace-nowrap">
+                        Nota bruta
+                      </label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="1"
+                        max="7"
+                        value={
+                          notasCurso[grupo.numero] ?? grupo.promedio_bruto ?? ""
+                        }
+                        onChange={(e) =>
+                          setNotaCurso(grupo.numero, e.target.value)
+                        }
+                        className="w-16 p-1.5 border border-blue-200 rounded text-sm text-center focus:ring-2 focus:ring-blue-400 outline-none bg-blue-50 font-semibold text-blue-700"
+                      />
                     </div>
-                  ))}
+                  </div>
+
+                  {/* ── Contenido desplegable ── */}
+                  {expandido && (
+                    <div className="flex flex-col gap-3 p-4">
+                      {grupo.estudiantes.map((est, idx) => (
+                        <div
+                          key={idx}
+                          className={`flex flex-col p-3 rounded-lg border ${
+                            est.gruposDuplicados
+                              ? "border-yellow-400 bg-yellow-50"
+                              : "bg-gray-50 border-gray-100"
+                          }`}
+                        >
+                          {/* Nombre */}
+                          <div className="mb-2">
+                            <span
+                              className="text-sm font-medium text-gray-700 truncate block"
+                              title={est.identificacion}
+                            >
+                              {est.identificacion}
+                              {est.gruposDuplicados && (
+                                <span className="ml-2 text-yellow-600 text-xs font-bold">
+                                  ⚠ duplicado
+                                </span>
+                              )}
+                            </span>
+                          </div>
+
+                          {/* Notas */}
+                          <div className="flex gap-2 flex-wrap">
+                            {/* Bruta */}
+                            <div className="flex flex-col items-center">
+                              <span className="text-[9px] text-blue-500 font-bold uppercase">
+                                Bruta
+                              </span>
+                              <span className="font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded text-xs border border-blue-100">
+                                {grupo.promedio_bruto ?? "—"}
+                              </span>
+                            </div>
+
+                            {/* Par */}
+                            <div className="flex flex-col items-center">
+                              <span className="text-[9px] text-green-600 font-bold uppercase">
+                                Par
+                              </span>
+                              {est.notaPar !== undefined ? (
+                                <span className="font-bold text-green-700 bg-green-100 px-2 py-0.5 rounded text-xs border border-green-200">
+                                  {est.notaPar}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-gray-400 italic px-2 py-0.5">
+                                  ...
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Final */}
+                            <div className="flex flex-col items-center">
+                              <span className="text-[9px] text-blue-600 font-bold uppercase">
+                                Final
+                              </span>
+                              {est.notaAjustada !== undefined ? (
+                                <span className="font-bold text-white bg-[#1a56a0] px-2 py-0.5 rounded text-xs shadow-sm">
+                                  {est.notaAjustada}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-gray-400 italic px-2 py-0.5">
+                                  ...
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Castigo */}
+                            <div className="flex flex-col items-center">
+                              <span className="text-[9px] text-red-500 font-bold uppercase">
+                                Castigo
+                              </span>
+                              {est.factorCastigoTotal !== undefined ? (
+                                <span
+                                  className={`font-bold px-2 py-0.5 rounded text-xs border ${
+                                    est.factorCastigoTotal > 0
+                                      ? "text-red-700 bg-red-50 border-red-200"
+                                      : "text-gray-400 bg-gray-50 border-gray-100"
+                                  }`}
+                                  title={`Fuera de grupo: -${(est.factorCastigoFueraGrupo! * 100).toFixed(1)}% | No evaluó: -${(est.factorCastigoNoEvaluo! * 100).toFixed(1)}%`}
+                                >
+                                  {est.factorCastigoTotal > 0
+                                    ? `-${(est.factorCastigoTotal * 100).toFixed(1)}%`
+                                    : "0%"}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-gray-400 italic px-2 py-0.5">
+                                  ...
+                                </span>
+                              )}
+                            </div>
+
+                            {/* c/castigo */}
+                            <div className="flex flex-col items-center border-l pl-2 border-gray-200">
+                              <span className="text-[9px] text-gray-700 font-bold uppercase">
+                                c/castigo
+                              </span>
+                              {est.notaConDescuento !== undefined ? (
+                                <span className="font-bold text-white bg-gray-700 px-2 py-0.5 rounded text-xs shadow-sm">
+                                  {est.notaConDescuento}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-gray-400 italic px-2 py-0.5">
+                                  ...
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Detalle castigo */}
+                          {est.factorCastigoTotal !== undefined &&
+                            est.factorCastigoTotal > 0 && (
+                              <div className="mt-2 text-[10px] text-red-500 flex gap-3 flex-wrap">
+                                {est.factorCastigoFueraGrupo! > 0 && (
+                                  <span>
+                                    X Fuera de grupo: -
+                                    {(
+                                      est.factorCastigoFueraGrupo! * 100
+                                    ).toFixed(1)}
+                                    %
+                                  </span>
+                                )}
+                                {est.factorCastigoNoEvaluo! > 0 && (
+                                  <span>
+                                    X No evaluó: -
+                                    {(est.factorCastigoNoEvaluo! * 100).toFixed(
+                                      1,
+                                    )}
+                                    %
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>
