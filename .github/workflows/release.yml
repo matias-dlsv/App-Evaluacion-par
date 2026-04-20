@@ -12,12 +12,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [macos-latest, ubuntu-22.04, windows-latest] # Aquí le decimos que compile en Windows
+        platform: [macos-latest, ubuntu-22.04, windows-latest] # Aquí le decimos que compile en Windows, Mac y Ubuntu
 
     runs-on: ${{ matrix.platform }}
     steps:
       - name: Checkout del código
         uses: actions/checkout@v4
+
+      # 👉 AQUÍ ESTÁ EL PASO NUEVO PARA SOLUCIONAR EL ERROR DE UBUNTU 👈
+      - name: Instalar dependencias de Linux (Solo para Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
 
       - name: Instalar dependencias de Node.js
         # Cambia pnpm por npm o yarn dependiendo de lo que uses en tu proyecto
