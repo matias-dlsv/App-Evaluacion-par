@@ -8,115 +8,150 @@ export async function exportarResultados(curso: Curso) {
   try {
     const response = await fetch('/plantilla.xlsx');
     if (!response.ok) throw new Error("No se encontró la plantilla.xlsx.");
-    
+
     const arrayBuffer = await response.arrayBuffer();
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(arrayBuffer);
 
     const sheet1 = workbook.getWorksheet('Lista y notas ponderadas');
     const sheet2 = workbook.getWorksheet('Notas evaluaciones par');
-    const sheet3 = workbook.getWorksheet('Verificacion y castigos'); // HOJA 3
-    
+    const sheet3 = workbook.getWorksheet('Verificacion y castigos');
+
     if (!sheet1 || !sheet2 || !sheet3) {
       throw new Error("No se encontraron las hojas en la plantilla. Revisa los nombres.");
     }
 
-    // --- MAPA PARA VERIFICAR GRUPOS RÁPIDAMENTE ---
+    // Mapa nombre -> grupo (número) para verificación en hoja 3
     const mapaGrupos = new Map<string, number>();
+    const todosLosEstudiantes: {
+      nombre: string;
+      grupo: number;
+      notaGrupo: number;
+      est: any;
+    }[] = [];
 
-    let todosLosEstudiantes: { nombre: string, grupo: number, notaGrupo: number, estCompleto: any }[] = [];
-    
     curso.grupos.forEach(grupo => {
-      const numeroGrupo = Number(grupo.numero) || 0; 
-      
+      const numeroGrupo = Number(grupo.numero) || 0;
       grupo.estudiantes.forEach(est => {
-        // Normalizamos el nombre (mayúsculas, sin espacios extra) para que la comparación sea perfecta
-        const nombreNormalizado = est.identificacion.trim().toUpperCase();
-        mapaGrupos.set(nombreNormalizado, numeroGrupo);
-
+        mapaGrupos.set(est.identificacion.trim().toUpperCase(), numeroGrupo);
         todosLosEstudiantes.push({
           nombre: est.identificacion,
           grupo: numeroGrupo,
           notaGrupo: grupo.promedio_bruto || 0,
-          estCompleto: est 
+          est,
         });
       });
     });
 
-    todosLosEstudiantes.sort((a, b) => a.grupo - b.grupo);
+    todosLosEstudiantes.sort((a, b) => 
+  a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base', numeric: true })
+);
 
-    // --- LLENAR HOJA 1 ---
-    let filaSheet1 = 2; 
-    todosLosEstudiantes.forEach(est => {
-      sheet1.getCell(`A${filaSheet1}`).value = est.nombre;
-      sheet1.getCell(`B${filaSheet1}`).value = est.grupo;
-      sheet1.getCell(`C${filaSheet1}`).value = est.notaGrupo;
-      filaSheet1++;
+    // --- HOJA 1: Lista y notas ponderadas ---
+    // Encabezado en fila 1 (ya en plantilla), datos desde fila 2
+    // A=Nombre, B=Grupo, C=Nota bruta, D=Eval Par,
+    // E=Proporción base, F=Factor Castigo, G=Proporción con Castigo, H=Nota Ajustada
+    todosLosEstudiantes.forEach((item, i) => {
+      const fila = i + 2;
+      const est = item.est;
+
+      sheet1.getCell(`A${fila}`).value = item.nombre;
+      sheet1.getCell(`B${fila}`).value = item.grupo;
+      sheet1.getCell(`C${fila}`).value = item.notaGrupo || null;
+      sheet1.getCell(`D${fila}`).value = est.notaPar ?? null;
+      sheet1.getCell(`E${fila}`).value = est.proporcionBase ?? null;
+      sheet1.getCell(`F${fila}`).value = est.factorCastigoTotal ?? null;
+      sheet1.getCell(`G${fila}`).value = est.proporcionConCastigo ?? null;
+      sheet1.getCell(`H${fila}`).value = est.notaConDescuento ?? null;
     });
 
-    // --- LLENAR HOJA 2 ---
-    let filaSheet2 = 3; 
-    todosLosEstudiantes.forEach(est => {
-      sheet2.getCell(`A${filaSheet2}`).value = est.nombre;
-      sheet2.getCell(`B${filaSheet2}`).value = est.grupo;
+    // --- HOJA 2: Notas evaluaciones par ---
+    // Fila 1 = encabezado principal, fila 2 = sub-encabezado (1,2,3,4,5)
+    // Datos desde fila 3
+    // A=Nombre, B=Grupo, C-G=notas individuales 1-5, H=Promedio
+    todosLosEstudiantes.forEach((item, i) => {
+      const fila = i + 3;
+      const est = item.est;
 
-      const datosEstudiante = est.estCompleto;
-      if (datosEstudiante.notasIndividualesPar) {
-        datosEstudiante.notasIndividualesPar.forEach((notaIndividual: number, indice: number) => {
-          if (indice < 5) { 
-            const letraColumna = String.fromCharCode(67 + indice); // C, D, E...
-            sheet2.getCell(`${letraColumna}${filaSheet2}`).value = notaIndividual;
-          }
-        });
-      }
-      sheet2.getCell(`H${filaSheet2}`).value = datosEstudiante.notaPar || "";
-      filaSheet2++;
-    });
+      sheet2.getCell(`A${fila}`).value = item.nombre;
+      sheet2.getCell(`B${fila}`).value = item.grupo;
 
-    // --- LLENAR HOJA 3: Verificación y castigos ---
-    let filaSheet3 = 3; // Basado en tu imagen, empieza en fila 3
-    todosLosEstudiantes.forEach(est => {
-      sheet3.getCell(`A${filaSheet3}`).value = est.nombre;
-      sheet3.getCell(`B${filaSheet3}`).value = est.grupo;
-
-      const nombresEvaluados = est.estCompleto.nombresEvaluados || [];
-
-      nombresEvaluados.forEach((nombreEvaluado: string, indice: number) => {
-        if (indice < 5) {
-          // Escribir el nombre del evaluado en C, D, E, F, G (Ascii 67 a 71)
-          const letraColEvaluado = String.fromCharCode(67 + indice); 
-          sheet3.getCell(`${letraColEvaluado}${filaSheet3}`).value = nombreEvaluado;
-
-          // Escribir la validación en J, K, L, M, N (Ascii 74 a 78)
-          const letraColAdecuado = String.fromCharCode(74 + indice);
-          
-          // Verificamos si pertenecen al mismo grupo consultando el Mapa
-          const grupoDelEvaluado = mapaGrupos.get(nombreEvaluado.trim().toUpperCase());
-          let validacion = "Inválido";
-          
-          if (grupoDelEvaluado !== undefined && grupoDelEvaluado === est.grupo) {
-            validacion = "OK";
-          }
-
-          sheet3.getCell(`${letraColAdecuado}${filaSheet3}`).value = validacion;
+      const notas: number[] = est.notasIndividualesPar || [];
+      notas.forEach((nota, idx) => {
+        if (idx < 5) {
+          const col = String.fromCharCode(67 + idx); // C, D, E, F, G
+          sheet2.getCell(`${col}${fila}`).value = nota;
         }
       });
 
-      filaSheet3++;
+      sheet2.getCell(`H${fila}`).value = est.notaPar ?? null;
+    });
+
+    // --- HOJA 3: Verificacion y castigos ---
+    // Fila 1 = encabezado principal, fila 2 = sub-encabezado
+    // Datos desde fila 3
+    // A=Nombre, B=Grupo, C-H=compañeros evaluados (hasta 6),
+    // I=Restantes, J=Castigo no evaluados,
+    // K-O=Grupo adecuado de cada compañero (hasta 5),
+    // P=Castigo ev. inválida, Q=Castigo total
+    todosLosEstudiantes.forEach((item, i) => {
+      const fila = i + 3;
+      const est = item.est;
+      const nombresEvaluados: string[] = est.nombresEvaluados || [];
+
+      const companerosTotales =
+        curso.grupos.find(g => Number(g.numero) === item.grupo)
+          ?.estudiantes.length ?? 1;
+      const companerosSinElMismo = Math.max(companerosTotales - 1, 0);
+
+      sheet3.getCell(`A${fila}`).value = item.nombre;
+      sheet3.getCell(`B${fila}`).value = item.grupo;
+
+      // Compañeros evaluados (C-H, hasta 6)
+      nombresEvaluados.forEach((nombre, idx) => {
+        if (idx < 6) {
+          const col = String.fromCharCode(67 + idx); // C, D, E, F, G, H
+          sheet3.getCell(`${col}${fila}`).value = nombre;
+        }
+      });
+
+      // Restantes no evaluados
+      const noEvaluados = Math.max(0, companerosSinElMismo - nombresEvaluados.length);
+      sheet3.getCell(`I${fila}`).value = noEvaluados;
+
+      // Castigo por no evaluar
+      sheet3.getCell(`J${fila}`).value = est.factorCastigoNoEvaluo ?? null;
+
+      // Grupo adecuado para cada compañero evaluado (K-O, hasta 5)
+      nombresEvaluados.forEach((nombre, idx) => {
+        if (idx < 5) {
+          const col = String.fromCharCode(75 + idx); // K, L, M, N, O
+          const grupoEvaluado = mapaGrupos.get(nombre.trim().toUpperCase());
+          const esValido = grupoEvaluado !== undefined && grupoEvaluado === item.grupo;
+          sheet3.getCell(`${col}${fila}`).value = esValido ? "OK" : "Inválido";
+        }
+      });
+
+      // Castigo por evaluaciones inválidas
+      sheet3.getCell(`P${fila}`).value = est.factorCastigoFueraGrupo ?? null;
+
+      // Castigo total
+      sheet3.getCell(`Q${fila}`).value = est.factorCastigoTotal ?? null;
     });
 
     // --- GUARDAR ---
     const bufferSalida = await workbook.xlsx.writeBuffer();
     const filePath = await save({
       filters: [{ name: 'Excel Workbook', extensions: ['xlsx'] }],
-      defaultPath: `${curso.nombre} - Resultados.xlsx`
+      defaultPath: `${curso.nombre} - Resultados.xlsx`,
     });
 
     if (filePath) {
       await writeFile(filePath, new Uint8Array(bufferSalida));
-      return true; 
+      return true;
     }
-    return false; 
+    return false;
+
   } catch (error) {
     console.error("Error al exportar:", error);
     throw error;

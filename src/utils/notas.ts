@@ -1,14 +1,22 @@
 // src/utils/notas.ts
 
-// Exportamos las interfaces para poder usarlas aquí y en App.tsx
 export interface Estudiante {
   identificacion: string;
   notaPar?: number;
   evaluaciones?: number;
   notasIndividualesPar?: number[];
-  nombresEvaluados?: string[]; // <-- NUEVA PROPIEDAD
+  nombresEvaluados?: string[];
   notaAjustada?: number;
+  factorCastigoFueraGrupo?: number;
+  factorCastigoNoEvaluo?: number;
+  factorCastigoTotal?: number;
+  notaConDescuento?: number;
+  gruposDuplicados?: boolean;
+  evaluacionesInvalidas?: number;
+  proporcionBase?: number;
+  proporcionConCastigo?: number;
 }
+
 export interface Grupo {
   numero: string;
   promedio_bruto?: number;
@@ -21,50 +29,102 @@ export interface Curso {
   grupos: Grupo[];
 }
 
-export function calcularNotasAjustadas(curso: Curso): Curso {
+export interface ConfigDescuentos {
+  maxCastigoFueraGrupo: number;
+  maxCastigoNoEvaluo: number;
+}
+
+export const DEFAULT_DESCUENTOS: ConfigDescuentos = {
+  maxCastigoFueraGrupo: 0.1,
+  maxCastigoNoEvaluo: 0.1,
+};
+
+export function calcularNotasAjustadas(
+  curso: Curso,
+  config: ConfigDescuentos = DEFAULT_DESCUENTOS
+): Curso {
+  const estudianteAGrupos: Record<string, string[]> = {};
+  curso.grupos.forEach((grupo) => {
+    grupo.estudiantes.forEach((est) => {
+      if (!estudianteAGrupos[est.identificacion]) {
+        estudianteAGrupos[est.identificacion] = [];
+      }
+      estudianteAGrupos[est.identificacion].push(grupo.numero);
+    });
+  });
+
   const gruposActualizados = curso.grupos.map((grupo) => {
-    // Si el grupo no tiene nota bruta o sus estudiantes no tienen nota par, lo devolvemos tal cual
     if (grupo.promedio_bruto === undefined) return grupo;
 
-    const N = grupo.estudiantes.length;
-    const pozoTotal = grupo.promedio_bruto * N;
+    const pozoTotal = grupo.promedio_bruto * grupo.estudiantes.length;
+    const miembrosGrupo = new Set(grupo.estudiantes.map((e) => e.identificacion));
 
-    // Calculamos la suma de las notas par de todos los integrantes del grupo
-    const sumaNotasPar = grupo.estudiantes.reduce((suma, est) => {
-      return suma + (est.notaPar || 0);
-    }, 0);
-
-    // Si nadie tiene nota par (suma = 0), evitamos dividir por cero
+    const sumaNotasPar = grupo.estudiantes.reduce(
+      (suma, est) => suma + (est.notaPar || 0),
+      0
+    );
     if (sumaNotasPar === 0) return grupo;
 
-    // Calculamos la nota ajustada para cada estudiante
     const estudiantesAjustados = grupo.estudiantes.map((est) => {
       if (est.notaPar === undefined) return est;
 
-      const proporcion = est.notaPar / sumaNotasPar;
-      let notaFinal = pozoTotal * proporcion;
+      const proporcionBase = Math.round((est.notaPar / sumaNotasPar) * 1000) / 1000;
 
-      // Redondeamos a 1 decimal
-      notaFinal = Math.round(notaFinal * 10) / 10;
+      // Castigo por evaluar fuera del grupo: fijo por cada evaluación inválida
+      const invalidas = est.evaluacionesInvalidas ?? 0;
+      const factorCastigoFueraGrupo =
+        Math.round(Math.min(invalidas * config.maxCastigoFueraGrupo, 1) * 1000) / 1000;
 
-      // Opcional: Topar la nota máxima a 7.0 (si usan escala 1 a 7 en Chile)
-      // Si usan otra escala (ej. 1 a 10 o 0 a 100), cambia el 7.0 por tu nota máxima.
-      if (notaFinal > 7.0) notaFinal = 7.0;
+      // Castigo por no evaluar compañeros: proporcional
+      const evaluados = est.nombresEvaluados || [];
+      const companeros = grupo.estudiantes
+        .map((e) => e.identificacion)
+        .filter((id) => id !== est.identificacion);
+      const companerosSuGrupoEvaluados = evaluados.filter(
+        (nombre) => miembrosGrupo.has(nombre) && nombre !== est.identificacion
+      ).length;
+      const noEvaluados = Math.max(0, companeros.length - companerosSuGrupoEvaluados);
+      const fraccionNoEvaluada =
+        companeros.length > 0 ? noEvaluados / companeros.length : 0;
+      const factorCastigoNoEvaluo =
+        Math.round(fraccionNoEvaluada * config.maxCastigoNoEvaluo * 1000) / 1000;
+
+      const factorCastigoTotal =
+        Math.round((factorCastigoFueraGrupo + factorCastigoNoEvaluo) * 1000) / 1000;
+
+      // Proporción con castigo — sin renormalizar
+      const proporcionConCastigo =
+        Math.round(proporcionBase * (1 - factorCastigoTotal) * 1000) / 1000;
+
+      // Nota sin castigo
+      let notaAjustada = Math.round(pozoTotal * proporcionBase * 10) / 10;
+      if (notaAjustada > 7.0) notaAjustada = 7.0;
+
+      // Nota con castigo
+      let notaConDescuento = Math.round(pozoTotal * proporcionConCastigo * 10) / 10;
+      if (notaConDescuento > 7.0) notaConDescuento = 7.0;
+
+      const gruposDuplicados =
+        (estudianteAGrupos[est.identificacion]?.length ?? 0) > 1;
 
       return {
         ...est,
-        notaAjustada: notaFinal,
+        notaAjustada,
+        factorCastigoFueraGrupo,
+        factorCastigoNoEvaluo,
+        factorCastigoTotal,
+        notaConDescuento,
+        gruposDuplicados,
+        proporcionBase,
+        proporcionConCastigo,
       };
     });
+    estudiantesAjustados.sort((a, b) =>
+      a.identificacion.localeCompare(b.identificacion)
+    );
 
-    return {
-      ...grupo,
-      estudiantes: estudiantesAjustados,
-    };
+    return { ...grupo, estudiantes: estudiantesAjustados };
   });
 
-  return {
-    ...curso,
-    grupos: gruposActualizados,
-  };
+  return { ...curso, grupos: gruposActualizados };
 }
