@@ -252,11 +252,11 @@ function EditGrupo({ grupo, onSave, onCancel }: EditGrupoProps) {
                     )}
                   </div>
                 </td>
-                {/* Nota final: calculada o heredada */}
+                {/* Nota final con descuento */}
                 <td className="py-1.5 px-2 text-center">
-                  {est.notaAjustada !== undefined ? (
+                  {est.notaConDescuento !== undefined ? (
                     <span className="text-xs font-bold text-white bg-[#ce0019] px-2 py-1 rounded">
-                      {est.notaAjustada}
+                      {est.notaConDescuento}
                     </span>
                   ) : (
                     <span className="text-xs text-gray-400 italic">—</span>
@@ -786,11 +786,11 @@ function App() {
                                   <span className="text-gray-300 text-xs">—</span>
                                 )}
                               </td>
-                              {/* Nota Final */}
+                              {/* Nota Final (con descuentos) */}
                               <td className="px-3 py-2.5 text-center">
-                                {est.notaAjustada !== undefined ? (
+                                {est.notaConDescuento !== undefined ? (
                                   <span className="font-bold text-white bg-[#ce0019] px-2.5 py-0.5 rounded text-xs shadow-sm">
-                                    {est.notaAjustada}
+                                    {est.notaConDescuento}
                                   </span>
                                 ) : (
                                   <span className="text-gray-300 text-xs">—</span>
