@@ -34,35 +34,41 @@ fn limpiar_grupo_id(dato: &Data) -> String {
     }
 }
 
-/// Devuelve los índices de columnas que tienen al menos un valor numérico válido
-/// en las filas de datos (excluyendo la cabecera), sin incluir las columnas reservadas.
-fn detectar_columnas_numericas(
+/// Detecta columnas de criterios numéricos mirando los datos reales:
+/// una columna es criterio si tiene al menos `min_hits` filas con valor
+/// numérico parseable Y no está en el conjunto de columnas reservadas.
+/// Esto ignora columnas de texto libre, fechas, correos y comentarios
+/// sin importar cómo se llamen en el encabezado.
+fn detectar_columnas_criterio(
     rows: &[Vec<Data>],
     reservadas: &HashSet<usize>,
     total_cols: usize,
+    min_hits: usize,
 ) -> Vec<usize> {
-    let mut candidatas: HashSet<usize> = HashSet::new();
+    let mut conteo: Vec<usize> = vec![0; total_cols];
     for row in rows.iter().skip(1) {
         for col_idx in 0..total_cols {
             if reservadas.contains(&col_idx) {
                 continue;
             }
             if let Some(celda) = row.get(col_idx) {
-                if celda
-                    .to_string()
-                    .replace(',', ".")
-                    .trim()
-                    .parse::<f64>()
-                    .is_ok()
-                {
-                    candidatas.insert(col_idx);
+                // Solo Data::Float y Data::Int son valores numéricos reales;
+                // strings que parezcan números (ej: correos con dígitos) no cuentan.
+                let es_numerico = matches!(celda, Data::Float(_) | Data::Int(_));
+                if es_numerico {
+                    conteo[col_idx] += 1;
                 }
             }
         }
     }
-    let mut v: Vec<usize> = candidatas.into_iter().collect();
-    v.sort();
-    v
+    let mut criterios: Vec<usize> = conteo
+        .iter()
+        .enumerate()
+        .filter(|&(idx, &cnt)| !reservadas.contains(&idx) && cnt >= min_hits)
+        .map(|(idx, _)| idx)
+        .collect();
+    criterios.sort();
+    criterios
 }
 
 pub mod comandos {
@@ -114,7 +120,8 @@ pub mod comandos {
         }
 
         let total_cols = rows.first().map(|r| r.len()).unwrap_or(0);
-        let indices_criterios = detectar_columnas_numericas(&rows, &reservadas, total_cols);
+        // min_hits=1: basta con que al menos 1 fila tenga valor numérico real
+        let indices_criterios = detectar_columnas_criterio(&rows, &reservadas, total_cols, 1);
 
         let mut datos_por_grupo: HashMap<String, HashMap<String, (f64, usize, Vec<f64>)>> =
             HashMap::new();
@@ -158,10 +165,12 @@ pub mod comandos {
             let mut suma = 0.0;
             let mut count = 0;
             for &c in &indices_criterios {
-                let val = row.get(c).map(|d| d.to_string()).unwrap_or_default();
-                if let Ok(n) = val.replace(',', ".").parse::<f64>() {
-                    suma += n;
-                    count += 1;
+                if let Some(celda) = row.get(c) {
+                    match celda {
+                        Data::Float(n) => { suma += n; count += 1; }
+                        Data::Int(n) => { suma += *n as f64; count += 1; }
+                        _ => {}
+                    }
                 }
             }
 
@@ -251,7 +260,7 @@ pub mod comandos {
         }
 
         let total_cols = rows.first().map(|r| r.len()).unwrap_or(0);
-        let indices_criterios = detectar_columnas_numericas(&rows, &reservadas, total_cols);
+        let indices_criterios = detectar_columnas_criterio(&rows, &reservadas, total_cols, 1);
 
         let mut persona_a_grupo: HashMap<String, String> = HashMap::new();
 
@@ -259,7 +268,6 @@ pub mod comandos {
             if i == 0 {
                 continue;
             }
-
             let evaluado = evaluado_idx
                 .and_then(|i| row.get(i))
                 .map(|d| d.to_string().trim().replace('/', " "))
@@ -330,10 +338,12 @@ pub mod comandos {
                 let mut suma = 0.0;
                 let mut count = 0;
                 for &c in &indices_criterios {
-                    let val = row.get(c).map(|d| d.to_string()).unwrap_or_default();
-                    if let Ok(n) = val.replace(',', ".").parse::<f64>() {
-                        suma += n;
-                        count += 1;
+                    if let Some(celda) = row.get(c) {
+                        match celda {
+                            Data::Float(n) => { suma += n; count += 1; }
+                            Data::Int(n) => { suma += *n as f64; count += 1; }
+                            _ => {}
+                        }
                     }
                 }
 
@@ -374,7 +384,6 @@ pub mod comandos {
                     .unwrap_or_default();
 
                 let invalidas = evaluaciones_invalidas.get(&est).copied().unwrap_or(0);
-
                 let grupo_real = persona_a_grupo.get(&est).cloned().unwrap_or_default();
 
                 super::NotaEstudiante {
