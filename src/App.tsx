@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import { load} from "@tauri-apps/plugin-store";
+import { load } from "@tauri-apps/plugin-store";
 import { create } from "zustand";
 import "./App.css";
 import {
@@ -359,14 +359,16 @@ function App() {
   const [cursoActivo, setCursoActivo] = useState<Curso | null>(null);
   const [nombreCurso, setNombreCurso] = useState("");
   const [estadoCarga, setEstadoCarga] = useState("");
-  const [notasBrutas, setNotasBrutas] = useState
+  const [notasBrutas, setNotasBrutas] = useState<
     Record<string, Record<string, string>>
   >({});
   const [config, setConfig] = useState<ConfigDescuentos>(DEFAULT_DESCUENTOS);
-  const [gruposExpandidos, setGruposExpandidos] = useState
+
+  const [gruposExpandidos, setGruposExpandidos] = useState<
     Record<string, Set<string>>
   >({});
-  const [gruposEditando, setGruposEditando] = useState
+
+  const [gruposEditando, setGruposEditando] = useState<
     Record<string, Set<string>>
   >({});
   const [busqueda, setBusqueda] = useState("");
@@ -376,7 +378,7 @@ function App() {
   useEffect(() => {
     (async () => {
       try {
-        const store = await load("cursos.json", { autoSave: true });
+        const store = await load("cursos.json", { defaults: { cursos: [] } });
         storeRef.current = store;
         const guardados = await store.get<Curso[]>("cursos");
         if (guardados && guardados.length > 0) {
@@ -604,9 +606,7 @@ function App() {
         ? cursoData.grupos
         : cursoData.grupos.filter((grupo) =>
             grupo.estudiantes.some((est) =>
-              est.identificacion
-                .toLowerCase()
-                .includes(busqueda.toLowerCase()),
+              est.identificacion.toLowerCase().includes(busqueda.toLowerCase()),
             ),
           );
 
@@ -846,9 +846,7 @@ function App() {
                 >
                   <div
                     className={`flex items-center gap-3 px-5 py-4 border-b border-gray-100 select-none transition-colors ${
-                      editando
-                        ? "bg-red-50"
-                        : "cursor-pointer hover:bg-red-50"
+                      editando ? "bg-red-50" : "cursor-pointer hover:bg-red-50"
                     }`}
                     onClick={() =>
                       !editando && toggleGrupo(cursoData.id, grupo.numero)
@@ -934,9 +932,7 @@ function App() {
                       onSave={(g) =>
                         guardarEdicionGrupo(cursoData.id, g, grupo.numero)
                       }
-                      onCancel={() =>
-                        cerrarEdicion(cursoData.id, grupo.numero)
-                      }
+                      onCancel={() => cerrarEdicion(cursoData.id, grupo.numero)}
                     />
                   )}
 
