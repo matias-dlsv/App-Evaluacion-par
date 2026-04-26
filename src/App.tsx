@@ -373,9 +373,7 @@ function App() {
   >({});
   const [busqueda, setBusqueda] = useState("");
   const storeRef = useRef<Awaited<ReturnType<typeof load>> | null>(null);
-  const cargaCompletaRef = useRef(false);
 
-  // Cargar cursos guardados al iniciar
   useEffect(() => {
     (async () => {
       try {
@@ -387,17 +385,14 @@ function App() {
         }
       } catch (e) {
         console.error("Error cargando store:", e);
-      } finally {
-        cargaCompletaRef.current = true;
       }
     })();
   }, []);
 
-  // Guardar cada vez que cambian los cursos, pero solo después de cargar
-  useEffect(() => {
-    if (!storeRef.current || !cargaCompletaRef.current) return;
-    storeRef.current.set("cursos", cursos);
-  }, [cursos]);
+  // Helper para guardar explícitamente
+  const guardarEnStore = (lista: Curso[]) => {
+    storeRef.current?.set("cursos", lista);
+  };
 
   const crearCurso = async () => {
     if (!nombreCurso.trim()) return setEstadoCarga("Ingresa un nombre.");
@@ -441,6 +436,7 @@ function App() {
       };
 
       agregarCurso(nuevoCurso);
+      guardarEnStore([...cursos, nuevoCurso]);
       setNombreCurso("");
       setEstadoCarga("");
     } catch (error) {
@@ -454,9 +450,7 @@ function App() {
       return;
     const restantes = cursos.filter((c) => c.id !== cursoId);
     eliminarCurso(cursoId);
-    if (storeRef.current) {
-      storeRef.current.set("cursos", restantes);
-    }
+    guardarEnStore(restantes);
     if (cursoActivo?.id === cursoId) setCursoActivo(null);
   };
 
@@ -465,6 +459,7 @@ function App() {
     const grupo = nuevoGrupo(cursoData.grupos);
     const actualizado = { ...cursoData, grupos: [...cursoData.grupos, grupo] };
     actualizarCurso(actualizado);
+    guardarEnStore(cursos.map((c) => (c.id === cursoId ? actualizado : c))); // ← agregar
     setCursoActivo(actualizado);
     setGruposEditando((prev) => {
       const set = new Set(prev[cursoId] ?? []);
@@ -491,6 +486,7 @@ function App() {
       grupos: cursoData.grupos.filter((g) => g.numero !== grupoNumero),
     };
     actualizarCurso(actualizado);
+    guardarEnStore(cursos.map((c) => (c.id === cursoId ? actualizado : c)));
     setCursoActivo(actualizado);
   };
 
@@ -547,6 +543,9 @@ function App() {
     const cursoConBrutas: Curso = { ...cursoData, grupos: gruposActualizados };
     const cursoFinal = calcularNotasAjustadas(cursoConBrutas, config);
     actualizarCurso(cursoFinal);
+    guardarEnStore(
+      cursos.map((c) => (c.id === cursoFinal.id ? cursoFinal : c)),
+    );
     setCursoActivo(cursoFinal);
   };
 
