@@ -1,7 +1,8 @@
 // src/App.tsx
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
+import { load} from "@tauri-apps/plugin-store";
 import { create } from "zustand";
 import "./App.css";
 import {
@@ -16,7 +17,7 @@ import { exportarResultados } from "./utils/exportarExcel";
 
 interface NotaExtraida {
   identificacion: string;
-  nota_promedio: number | null; // null = sin evaluaciones válidas recibidas
+  nota_promedio: number | null;
   cantidad_evaluaciones: number;
   notas_individuales: number[];
   nombres_evaluados: string[];
@@ -28,6 +29,8 @@ interface AppState {
   cursos: Curso[];
   agregarCurso: (curso: Curso) => void;
   actualizarCurso: (cursoActualizado: Curso) => void;
+  eliminarCurso: (id: string) => void;
+  setCursos: (cursos: Curso[]) => void;
 }
 
 const useAppStore = create<AppState>((set) => ({
@@ -40,6 +43,11 @@ const useAppStore = create<AppState>((set) => ({
         c.id === cursoActualizado.id ? cursoActualizado : c,
       ),
     })),
+  eliminarCurso: (id) =>
+    set((state) => ({
+      cursos: state.cursos.filter((c) => c.id !== id),
+    })),
+  setCursos: (cursos) => set({ cursos }),
 }));
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -142,7 +150,6 @@ function EditGrupo({ grupo, onSave, onCancel }: EditGrupoProps) {
 
   return (
     <div className="flex flex-col gap-4 p-4 bg-red-50 border-t border-red-200">
-      {/* Nota bruta del grupo */}
       <div className="flex items-end gap-4">
         <div className="flex flex-col gap-1">
           <label className="text-[10px] font-bold text-gray-500 uppercase">
@@ -160,7 +167,6 @@ function EditGrupo({ grupo, onSave, onCancel }: EditGrupoProps) {
         </div>
       </div>
 
-      {/* Tabla de estudiantes */}
       <div className="overflow-x-auto">
         <table className="w-full text-xs border-collapse">
           <thead>
@@ -348,21 +354,45 @@ function EditGrupo({ grupo, onSave, onCancel }: EditGrupoProps) {
 // ─── App principal ─────────────────────────────────────────────────────────────
 
 function App() {
-  const { cursos, agregarCurso, actualizarCurso } = useAppStore();
+  const { cursos, agregarCurso, actualizarCurso, eliminarCurso, setCursos } =
+    useAppStore();
   const [cursoActivo, setCursoActivo] = useState<Curso | null>(null);
   const [nombreCurso, setNombreCurso] = useState("");
   const [estadoCarga, setEstadoCarga] = useState("");
-  const [notasBrutas, setNotasBrutas] = useState<
+  const [notasBrutas, setNotasBrutas] = useState
     Record<string, Record<string, string>>
   >({});
   const [config, setConfig] = useState<ConfigDescuentos>(DEFAULT_DESCUENTOS);
-  const [gruposExpandidos, setGruposExpandidos] = useState<
+  const [gruposExpandidos, setGruposExpandidos] = useState
     Record<string, Set<string>>
   >({});
-  const [gruposEditando, setGruposEditando] = useState<
+  const [gruposEditando, setGruposEditando] = useState
     Record<string, Set<string>>
   >({});
   const [busqueda, setBusqueda] = useState("");
+  const storeRef = useRef<Awaited<ReturnType<typeof load>> | null>(null);
+
+  // Cargar cursos guardados al iniciar
+  useEffect(() => {
+    (async () => {
+      try {
+        const store = await load("cursos.json", { autoSave: true });
+        storeRef.current = store;
+        const guardados = await store.get<Curso[]>("cursos");
+        if (guardados && guardados.length > 0) {
+          setCursos(guardados);
+        }
+      } catch (e) {
+        console.error("Error cargando store:", e);
+      }
+    })();
+  }, []);
+
+  // Guardar cada vez que cambian los cursos
+  useEffect(() => {
+    if (!storeRef.current) return;
+    storeRef.current.set("cursos", cursos);
+  }, [cursos]);
 
   const crearCurso = async () => {
     if (!nombreCurso.trim()) return setEstadoCarga("Ingresa un nombre.");
@@ -389,7 +419,6 @@ function App() {
           if (!nota) return est;
           return {
             ...est,
-            // Si nota_promedio es null (sin evaluaciones), notaPar queda undefined
             notaPar:
               nota.nota_promedio !== null ? nota.nota_promedio : undefined,
             evaluaciones: nota.cantidad_evaluaciones,
@@ -412,6 +441,18 @@ function App() {
     } catch (error) {
       setEstadoCarga(`Error: ${error}`);
     }
+  };
+
+  const handleEliminarCurso = (e: React.MouseEvent, cursoId: string) => {
+    e.stopPropagation();
+    if (!confirm("¿Eliminar este curso? Esta acción no se puede deshacer."))
+      return;
+    const restantes = cursos.filter((c) => c.id !== cursoId);
+    eliminarCurso(cursoId);
+    if (storeRef.current) {
+      storeRef.current.set("cursos", restantes);
+    }
+    if (cursoActivo?.id === cursoId) setCursoActivo(null);
   };
 
   const crearGrupoVacio = (cursoId: string) => {
@@ -545,6 +586,8 @@ function App() {
     );
   })();
 
+  // ─── Vista de curso activo ───────────────────────────────────────────────────
+
   if (cursoActivo) {
     const cursoData =
       cursos.find((c) => c.id === cursoActivo.id) || cursoActivo;
@@ -555,14 +598,18 @@ function App() {
         [cursoData.id]: { ...(prev[cursoData.id] ?? {}), [grupoNumero]: valor },
       }));
     const allExpanded = todosExpandidos(cursoData.id, cursoData.grupos);
+
     const gruposFiltrados =
       busqueda.trim() === ""
         ? cursoData.grupos
         : cursoData.grupos.filter((grupo) =>
             grupo.estudiantes.some((est) =>
-              est.identificacion.toLowerCase().includes(busqueda.toLowerCase()),
+              est.identificacion
+                .toLowerCase()
+                .includes(busqueda.toLowerCase()),
             ),
           );
+
     return (
       <div className="min-h-screen bg-gray-50 p-8">
         <div className="w-full">
@@ -687,6 +734,7 @@ function App() {
             </div>
           </div>
 
+          {/* Barra de controles + searchbar */}
           <div className="flex flex-col gap-3 mb-4">
             <div className="flex justify-between items-center">
               <div className="flex gap-2">
@@ -759,7 +807,7 @@ function App() {
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
                 placeholder="Buscar por integrante..."
-                className="w-full pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 placeholder-gray-400 focus:ring-2 focus:ring-red-300 focus:border-red-300 outline-none shadow-sm"
+                className="w-full pl-9 pr-10 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 placeholder-gray-400 focus:ring-2 focus:ring-red-300 focus:border-red-300 outline-none shadow-sm"
               />
               {busqueda && (
                 <button
@@ -777,7 +825,6 @@ function App() {
                 </button>
               )}
             </div>
-
             {busqueda && (
               <p className="text-xs text-gray-400">
                 {gruposFiltrados.length === 0
@@ -788,7 +835,7 @@ function App() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-              {gruposFiltrados.map((grupo) => {
+            {gruposFiltrados.map((grupo) => {
               const expandido = estaExpandido(cursoData.id, grupo.numero);
               const editando = estaEditando(cursoData.id, grupo.numero);
 
@@ -799,7 +846,9 @@ function App() {
                 >
                   <div
                     className={`flex items-center gap-3 px-5 py-4 border-b border-gray-100 select-none transition-colors ${
-                      editando ? "bg-red-50" : "cursor-pointer hover:bg-red-50"
+                      editando
+                        ? "bg-red-50"
+                        : "cursor-pointer hover:bg-red-50"
                     }`}
                     onClick={() =>
                       !editando && toggleGrupo(cursoData.id, grupo.numero)
@@ -885,7 +934,9 @@ function App() {
                       onSave={(g) =>
                         guardarEdicionGrupo(cursoData.id, g, grupo.numero)
                       }
-                      onCancel={() => cerrarEdicion(cursoData.id, grupo.numero)}
+                      onCancel={() =>
+                        cerrarEdicion(cursoData.id, grupo.numero)
+                      }
                     />
                   )}
 
@@ -1037,6 +1088,8 @@ function App() {
     );
   }
 
+  // ─── Vista principal (lista de cursos) ───────────────────────────────────────
+
   return (
     <div className="flex h-screen bg-gray-100 text-gray-800 font-sans">
       <div className="w-1/3 bg-gradient-to-b from-[#ce0019] to-[#a80014] p-8 shadow-lg flex flex-col gap-6 border-r border-red-900 z-10 text-white">
@@ -1103,9 +1156,25 @@ function App() {
               <h3 className="text-xl font-bold text-gray-800 group-hover:text-[#ce0019]">
                 {curso.nombre}
               </h3>
-              <span className="text-sm bg-red-50 text-[#ce0019] py-1 px-3 rounded-full border border-red-200">
-                {curso.grupos.length} grupos →
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-sm bg-red-50 text-[#ce0019] py-1 px-3 rounded-full border border-red-200">
+                  {curso.grupos.length} grupos →
+                </span>
+                <button
+                  onClick={(e) => handleEliminarCurso(e, curso.id)}
+                  title="Eliminar curso"
+                  className="flex items-center justify-center w-7 h-7 rounded-full hover:bg-red-100 text-gray-300 hover:text-red-500 transition cursor-pointer"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 16 16"
+                    fill="currentColor"
+                    className="w-4 h-4"
+                  >
+                    <path d="M5.28 4.22a.75.75 0 0 0-1.06 1.06L6.94 8l-2.72 2.72a.75.75 0 1 0 1.06 1.06L8 9.06l2.72 2.72a.75.75 0 1 0 1.06-1.06L9.06 8l2.72-2.72a.75.75 0 0 0-1.06-1.06L8 6.94 5.28 4.22Z" />
+                  </svg>
+                </button>
+              </div>
             </div>
           ))}
         </div>
