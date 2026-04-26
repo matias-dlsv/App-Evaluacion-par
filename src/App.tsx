@@ -102,11 +102,14 @@ function EditGrupo({ grupo, onSave, onCancel }: EditGrupoProps) {
     setDraft((p) => {
       const ests = [...p.estudiantes];
       const numFields = ["notaPar", "evaluaciones", "factorCastigoFueraGrupo", "factorCastigoNoEvaluo"];
+      const esDescuento = field === "factorCastigoFueraGrupo" || field === "factorCastigoNoEvaluo";
       ests[idx] = {
         ...ests[idx],
         [field]: numFields.includes(field as string)
           ? val === "" ? undefined : parseFloat(val)
           : val,
+        // Si se edita un descuento, marcarlo como manual para que no se pise al recalcular
+        ...(esDescuento && { descuentoManual: true }),
       };
       return { ...p, estudiantes: ests };
     });
@@ -195,29 +198,59 @@ function EditGrupo({ grupo, onSave, onCancel }: EditGrupoProps) {
                 </td>
                 {/* Descuento No Evaluar */}
                 <td className="py-1.5 px-2">
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    max="1"
-                    value={est.factorCastigoNoEvaluo ?? ""}
-                    onChange={(e) => setEst(idx, "factorCastigoNoEvaluo", e.target.value)}
-                    placeholder="0"
-                    className="w-14 p-1 border border-orange-200 rounded text-xs text-center focus:ring-1 focus:ring-orange-300 outline-none bg-white block mx-auto"
-                  />
+                  <div className="flex flex-col items-center gap-0.5">
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      max="1"
+                      value={est.factorCastigoNoEvaluo ?? ""}
+                      onChange={(e) => setEst(idx, "factorCastigoNoEvaluo", e.target.value)}
+                      placeholder="0"
+                      className="w-14 p-1 border border-orange-200 rounded text-xs text-center focus:ring-1 focus:ring-orange-300 outline-none bg-white block mx-auto"
+                    />
+                    {est.descuentoManual && (
+                      <button
+                        onClick={() => setDraft((p) => {
+                          const ests = [...p.estudiantes];
+                          ests[idx] = { ...ests[idx], descuentoManual: false, factorCastigoNoEvaluo: undefined };
+                          return { ...p, estudiantes: ests };
+                        })}
+                        className="text-[9px] text-orange-400 hover:text-orange-600 underline cursor-pointer leading-none"
+                        title="Volver al cálculo automático"
+                      >
+                        manual · resetear
+                      </button>
+                    )}
+                  </div>
                 </td>
                 {/* Descuento Grupo Ajeno */}
                 <td className="py-1.5 px-2">
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    max="1"
-                    value={est.factorCastigoFueraGrupo ?? ""}
-                    onChange={(e) => setEst(idx, "factorCastigoFueraGrupo", e.target.value)}
-                    placeholder="0"
-                    className="w-14 p-1 border border-red-200 rounded text-xs text-center focus:ring-1 focus:ring-red-300 outline-none bg-white block mx-auto"
-                  />
+                  <div className="flex flex-col items-center gap-0.5">
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      max="1"
+                      value={est.factorCastigoFueraGrupo ?? ""}
+                      onChange={(e) => setEst(idx, "factorCastigoFueraGrupo", e.target.value)}
+                      placeholder="0"
+                      className="w-14 p-1 border border-red-200 rounded text-xs text-center focus:ring-1 focus:ring-red-300 outline-none bg-white block mx-auto"
+                    />
+                    {est.descuentoManual && (
+                      <button
+                        onClick={() => setDraft((p) => {
+                          const ests = [...p.estudiantes];
+                          ests[idx] = { ...ests[idx], descuentoManual: false, factorCastigoFueraGrupo: undefined };
+                          return { ...p, estudiantes: ests };
+                        })}
+                        className="text-[9px] text-red-400 hover:text-red-600 underline cursor-pointer leading-none"
+                        title="Volver al cálculo automático"
+                      >
+                        manual · resetear
+                      </button>
+                    )}
+                  </div>
                 </td>
                 {/* Nota final: calculada o heredada */}
                 <td className="py-1.5 px-2 text-center">
@@ -730,6 +763,7 @@ function App() {
                                     {est.factorCastigoNoEvaluo > 0
                                       ? `-${(est.factorCastigoNoEvaluo * 100).toFixed(0)}%`
                                       : "0%"}
+                                    {est.descuentoManual && <span className="ml-1 text-[9px] opacity-60">✎</span>}
                                   </span>
                                 ) : (
                                   <span className="text-gray-300 text-xs">—</span>
@@ -746,6 +780,7 @@ function App() {
                                     {est.factorCastigoFueraGrupo > 0
                                       ? `-${(est.factorCastigoFueraGrupo * 100).toFixed(0)}%`
                                       : "0%"}
+                                    {est.descuentoManual && <span className="ml-1 text-[9px] opacity-60">✎</span>}
                                   </span>
                                 ) : (
                                   <span className="text-gray-300 text-xs">—</span>
