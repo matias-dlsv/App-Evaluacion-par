@@ -362,6 +362,7 @@ function App() {
   const [gruposEditando, setGruposEditando] = useState<
     Record<string, Set<string>>
   >({});
+  const [busqueda, setBusqueda] = useState("");
 
   const crearCurso = async () => {
     if (!nombreCurso.trim()) return setEstadoCarga("Ingresa un nombre.");
@@ -554,7 +555,14 @@ function App() {
         [cursoData.id]: { ...(prev[cursoData.id] ?? {}), [grupoNumero]: valor },
       }));
     const allExpanded = todosExpandidos(cursoData.id, cursoData.grupos);
-
+    const gruposFiltrados =
+      busqueda.trim() === ""
+        ? cursoData.grupos
+        : cursoData.grupos.filter((grupo) =>
+            grupo.estudiantes.some((est) =>
+              est.identificacion.toLowerCase().includes(busqueda.toLowerCase()),
+            ),
+          );
     return (
       <div className="min-h-screen bg-gray-50 p-8">
         <div className="w-full">
@@ -679,24 +687,40 @@ function App() {
             </div>
           </div>
 
-          <div className="flex justify-between items-center mb-4">
-            <div className="flex gap-2">
-              <button
-                onClick={() =>
-                  toggleTodos(cursoData.id, cursoData.grupos, !allExpanded)
-                }
-                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-600 font-medium rounded-lg hover:bg-gray-50 hover:border-gray-400 transition text-sm shadow-sm cursor-pointer"
-              >
-                {allExpanded ? (
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 16 16"
-                    fill="currentColor"
-                    className="w-4 h-4"
-                  >
-                    <path d="M3.75 7.25a.75.75 0 0 0 0 1.5h8.5a.75.75 0 0 0 0-1.5h-8.5Z" />
-                  </svg>
-                ) : (
+          <div className="flex flex-col gap-3 mb-4">
+            <div className="flex justify-between items-center">
+              <div className="flex gap-2">
+                <button
+                  onClick={() =>
+                    toggleTodos(cursoData.id, cursoData.grupos, !allExpanded)
+                  }
+                  className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-600 font-medium rounded-lg hover:bg-gray-50 hover:border-gray-400 transition text-sm shadow-sm cursor-pointer"
+                >
+                  {allExpanded ? (
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 16 16"
+                      fill="currentColor"
+                      className="w-4 h-4"
+                    >
+                      <path d="M3.75 7.25a.75.75 0 0 0 0 1.5h8.5a.75.75 0 0 0 0-1.5h-8.5Z" />
+                    </svg>
+                  ) : (
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 16 16"
+                      fill="currentColor"
+                      className="w-4 h-4"
+                    >
+                      <path d="M8.75 3.75a.75.75 0 0 0-1.5 0v3.5h-3.5a.75.75 0 0 0 0 1.5h3.5v3.5a.75.75 0 0 0 1.5 0v-3.5h3.5a.75.75 0 0 0 0-1.5h-3.5v-3.5Z" />
+                    </svg>
+                  )}
+                  {allExpanded ? "Colapsar todos" : "Expandir todos"}
+                </button>
+                <button
+                  onClick={() => crearGrupoVacio(cursoData.id)}
+                  className="flex items-center gap-2 px-4 py-2 bg-white border border-[#ce0019] text-[#ce0019] font-medium rounded-lg hover:bg-red-50 transition text-sm shadow-sm cursor-pointer"
+                >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     viewBox="0 0 16 16"
@@ -705,34 +729,66 @@ function App() {
                   >
                     <path d="M8.75 3.75a.75.75 0 0 0-1.5 0v3.5h-3.5a.75.75 0 0 0 0 1.5h3.5v3.5a.75.75 0 0 0 1.5 0v-3.5h3.5a.75.75 0 0 0 0-1.5h-3.5v-3.5Z" />
                   </svg>
-                )}
-                {allExpanded ? "Colapsar todos" : "Expandir todos"}
-              </button>
+                  Nuevo grupo
+                </button>
+              </div>
               <button
-                onClick={() => crearGrupoVacio(cursoData.id)}
-                className="flex items-center gap-2 px-4 py-2 bg-white border border-[#ce0019] text-[#ce0019] font-medium rounded-lg hover:bg-red-50 transition text-sm shadow-sm cursor-pointer"
+                onClick={aplicarNotasBrutas}
+                className="px-5 py-2 bg-[#ce0019] text-white font-semibold rounded-lg hover:bg-[#a80014] transition cursor-pointer text-sm shadow"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 16 16"
-                  fill="currentColor"
-                  className="w-4 h-4"
-                >
-                  <path d="M8.75 3.75a.75.75 0 0 0-1.5 0v3.5h-3.5a.75.75 0 0 0 0 1.5h3.5v3.5a.75.75 0 0 0 1.5 0v-3.5h3.5a.75.75 0 0 0 0-1.5h-3.5v-3.5Z" />
-                </svg>
-                Nuevo grupo
+                Calcular notas finales
               </button>
             </div>
-            <button
-              onClick={aplicarNotasBrutas}
-              className="px-5 py-2 bg-[#ce0019] text-white font-semibold rounded-lg hover:bg-[#a80014] transition cursor-pointer text-sm shadow"
-            >
-              Calcular notas finales
-            </button>
+
+            {/* Searchbar */}
+            <div className="relative">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 16 16"
+                fill="currentColor"
+                className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M9.965 11.026a5 5 0 1 1 1.06-1.06l2.755 2.754a.75.75 0 1 1-1.06 1.06l-2.755-2.754ZM10.5 7a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0Z"
+                  clipRule="evenodd"
+                />
+              </svg>
+              <input
+                type="text"
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                placeholder="Buscar por integrante..."
+                className="w-full pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 placeholder-gray-400 focus:ring-2 focus:ring-red-300 focus:border-red-300 outline-none shadow-sm"
+              />
+              {busqueda && (
+                <button
+                  onClick={() => setBusqueda("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 16 16"
+                    fill="currentColor"
+                    className="w-4 h-4"
+                  >
+                    <path d="M5.28 4.22a.75.75 0 0 0-1.06 1.06L6.94 8l-2.72 2.72a.75.75 0 1 0 1.06 1.06L8 9.06l2.72 2.72a.75.75 0 1 0 1.06-1.06L9.06 8l2.72-2.72a.75.75 0 0 0-1.06-1.06L8 6.94 5.28 4.22Z" />
+                  </svg>
+                </button>
+              )}
+            </div>
+
+            {busqueda && (
+              <p className="text-xs text-gray-400">
+                {gruposFiltrados.length === 0
+                  ? "Sin resultados"
+                  : `${gruposFiltrados.length} grupo${gruposFiltrados.length !== 1 ? "s" : ""} con "${busqueda}"`}
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            {cursoData.grupos.map((grupo) => {
+              {gruposFiltrados.map((grupo) => {
               const expandido = estaExpandido(cursoData.id, grupo.numero);
               const editando = estaEditando(cursoData.id, grupo.numero);
 
