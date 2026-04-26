@@ -17,7 +17,7 @@ pub struct Grupo {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct NotaEstudiante {
     pub identificacion: String,
-    pub nota_promedio: f64,
+    pub nota_promedio: Option<f64>, // None = sin evaluaciones válidas recibidas
     pub cantidad_evaluaciones: usize,
     pub notas_individuales: Vec<f64>,
     pub nombres_evaluados: Vec<String>,
@@ -34,16 +34,12 @@ fn limpiar_grupo_id(dato: &Data) -> String {
     }
 }
 
-/// Detecta columnas de criterios numéricos mirando los datos reales:
-/// una columna es criterio si tiene al menos `min_hits` filas con valor
-/// numérico parseable Y no está en el conjunto de columnas reservadas.
-/// Esto ignora columnas de texto libre, fechas, correos y comentarios
-/// sin importar cómo se llamen en el encabezado.
+/// Devuelve índices de columnas que tienen al menos un valor Data::Float o Data::Int
+/// en las filas de datos, excluyendo las columnas reservadas (evaluado/evaluador/grupo).
 fn detectar_columnas_criterio(
     rows: &[Vec<Data>],
     reservadas: &HashSet<usize>,
     total_cols: usize,
-    min_hits: usize,
 ) -> Vec<usize> {
     let mut conteo: Vec<usize> = vec![0; total_cols];
     for row in rows.iter().skip(1) {
@@ -52,10 +48,7 @@ fn detectar_columnas_criterio(
                 continue;
             }
             if let Some(celda) = row.get(col_idx) {
-                // Solo Data::Float y Data::Int son valores numéricos reales;
-                // strings que parezcan números (ej: correos con dígitos) no cuentan.
-                let es_numerico = matches!(celda, Data::Float(_) | Data::Int(_));
-                if es_numerico {
+                if matches!(celda, Data::Float(_) | Data::Int(_)) {
                     conteo[col_idx] += 1;
                 }
             }
@@ -64,7 +57,7 @@ fn detectar_columnas_criterio(
     let mut criterios: Vec<usize> = conteo
         .iter()
         .enumerate()
-        .filter(|&(idx, &cnt)| !reservadas.contains(&idx) && cnt >= min_hits)
+        .filter(|&(idx, &cnt)| !reservadas.contains(&idx) && cnt > 0)
         .map(|(idx, _)| idx)
         .collect();
     criterios.sort();
@@ -120,8 +113,7 @@ pub mod comandos {
         }
 
         let total_cols = rows.first().map(|r| r.len()).unwrap_or(0);
-        // min_hits=1: basta con que al menos 1 fila tenga valor numérico real
-        let indices_criterios = detectar_columnas_criterio(&rows, &reservadas, total_cols, 1);
+        let indices_criterios = detectar_columnas_criterio(&rows, &reservadas, total_cols);
 
         let mut datos_por_grupo: HashMap<String, HashMap<String, (f64, usize, Vec<f64>)>> =
             HashMap::new();
@@ -167,8 +159,14 @@ pub mod comandos {
             for &c in &indices_criterios {
                 if let Some(celda) = row.get(c) {
                     match celda {
-                        Data::Float(n) => { suma += n; count += 1; }
-                        Data::Int(n) => { suma += *n as f64; count += 1; }
+                        Data::Float(n) => {
+                            suma += n;
+                            count += 1;
+                        }
+                        Data::Int(n) => {
+                            suma += *n as f64;
+                            count += 1;
+                        }
                         _ => {}
                     }
                 }
@@ -260,10 +258,11 @@ pub mod comandos {
         }
 
         let total_cols = rows.first().map(|r| r.len()).unwrap_or(0);
-        let indices_criterios = detectar_columnas_criterio(&rows, &reservadas, total_cols, 1);
+        let indices_criterios = detectar_columnas_criterio(&rows, &reservadas, total_cols);
 
         let mut persona_a_grupo: HashMap<String, String> = HashMap::new();
 
+        // Pasada 1: mapa persona->grupo
         for (i, row) in rows.iter().enumerate() {
             if i == 0 {
                 continue;
@@ -291,6 +290,7 @@ pub mod comandos {
             }
         }
 
+        // Pasada 2: calcular notas filtrando evaluaciones inválidas
         let mut resumen: HashMap<String, (f64, usize, Vec<f64>, String)> = HashMap::new();
         let mut evaluaciones_invalidas: HashMap<String, usize> = HashMap::new();
         let mut a_quienes_evaluo_validos: HashMap<String, Vec<String>> = HashMap::new();
@@ -340,8 +340,14 @@ pub mod comandos {
                 for &c in &indices_criterios {
                     if let Some(celda) = row.get(c) {
                         match celda {
-                            Data::Float(n) => { suma += n; count += 1; }
-                            Data::Int(n) => { suma += *n as f64; count += 1; }
+                            Data::Float(n) => {
+                                suma += n;
+                                count += 1;
+                            }
+                            Data::Int(n) => {
+                                suma += *n as f64;
+                                count += 1;
+                            }
                             _ => {}
                         }
                     }
@@ -388,10 +394,11 @@ pub mod comandos {
 
                 super::NotaEstudiante {
                     identificacion: est,
+                    // None si no recibió ninguna evaluación válida
                     nota_promedio: if cantidad > 0 {
-                        (suma / cantidad as f64 * 10.0).round() / 10.0
+                        Some((suma / cantidad as f64 * 10.0).round() / 10.0)
                     } else {
-                        0.0
+                        None
                     },
                     cantidad_evaluaciones: cantidad,
                     notas_individuales: notas,
