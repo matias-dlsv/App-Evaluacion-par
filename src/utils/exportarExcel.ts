@@ -157,3 +157,36 @@ export async function exportarResultados(curso: Curso) {
     throw error;
   }
 }
+export async function exportarCSVGrupo(curso: Curso, grupoNumero: string) {
+  const grupo = curso.grupos.find(g => g.numero === grupoNumero);
+  if (!grupo) throw new Error("Grupo no encontrado");
+
+  const filas: string[][] = [
+    ["Nombre", "Nota Bruta", "Ev. Par", "Desc. No Evaluó", "Desc. Grupo Ajeno", "Nota Final"]
+  ];
+
+  grupo.estudiantes.forEach(est => {
+    filas.push([
+      est.identificacion,
+      grupo.promedio_bruto?.toString() ?? "",
+      est.notaPar?.toString() ?? "",
+      est.factorCastigoNoEvaluo?.toString() ?? "",
+      est.factorCastigoFueraGrupo?.toString() ?? "",
+      est.notaConDescuento?.toString() ?? "",
+    ]);
+  });
+
+  const csv = filas.map(f => f.map(c => `"${c}"`).join(",")).join("\n");
+
+  const filePath = await save({
+    filters: [{ name: "CSV", extensions: ["csv"] }],
+    defaultPath: `${curso.nombre} - Grupo ${grupoNumero}.csv`,
+  });
+
+  if (filePath) {
+    const encoder = new TextEncoder();
+    await writeFile(filePath, encoder.encode(csv));
+    return true;
+  }
+  return false;
+}
