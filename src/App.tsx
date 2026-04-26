@@ -373,6 +373,7 @@ function App() {
   >({});
   const [busqueda, setBusqueda] = useState("");
   const storeRef = useRef<Awaited<ReturnType<typeof load>> | null>(null);
+  const cargaCompletaRef = useRef(false);
 
   // Cargar cursos guardados al iniciar
   useEffect(() => {
@@ -386,13 +387,15 @@ function App() {
         }
       } catch (e) {
         console.error("Error cargando store:", e);
+      } finally {
+        cargaCompletaRef.current = true;
       }
     })();
   }, []);
 
-  // Guardar cada vez que cambian los cursos
+  // Guardar cada vez que cambian los cursos, pero solo después de cargar
   useEffect(() => {
-    if (!storeRef.current) return;
+    if (!storeRef.current || !cargaCompletaRef.current) return;
     storeRef.current.set("cursos", cursos);
   }, [cursos]);
 
