@@ -17,7 +17,7 @@ pub struct Grupo {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct NotaEstudiante {
     pub identificacion: String,
-    pub nota_promedio: Option<f64>, // None = sin evaluaciones válidas recibidas
+    pub nota_promedio: Option<f64>,
     pub cantidad_evaluaciones: usize,
     pub notas_individuales: Vec<f64>,
     pub nombres_evaluados: Vec<String>,
@@ -34,8 +34,6 @@ fn limpiar_grupo_id(dato: &Data) -> String {
     }
 }
 
-/// Devuelve índices de columnas que tienen al menos un valor Data::Float o Data::Int
-/// en las filas de datos, excluyendo las columnas reservadas (evaluado/evaluador/grupo).
 fn detectar_columnas_criterio(
     rows: &[Vec<Data>],
     reservadas: &HashSet<usize>,
@@ -64,11 +62,8 @@ fn detectar_columnas_criterio(
     criterios
 }
 
-/// Detecta el valor máximo presente en las columnas criterio.
-/// Ese valor es el techo de la escala del formulario (ej: 4, 8, 10…).
-/// Así el mapeo a escala 1–7 es flexible sin configuración manual.
 fn detectar_escala_max(rows: &[Vec<Data>], criterios: &[usize]) -> f64 {
-    let mut max_val: f64 = 1.0; // fallback seguro
+    let mut max_val: f64 = 1.0;
     for row in rows.iter().skip(1) {
         for &col in criterios {
             if let Some(celda) = row.get(col) {
@@ -86,13 +81,6 @@ fn detectar_escala_max(rows: &[Vec<Data>], criterios: &[usize]) -> f64 {
         }
     }
     max_val
-}
-
-/// Mapea un valor crudo de la escala del formulario a la escala 1–7.
-/// escala_max es el techo detectado (ej: 4.0, 8.0, 10.0…).
-#[inline]
-fn a_escala_7(valor: f64, escala_max: f64) -> f64 {
-    1.0 + (valor / escala_max) * 6.0
 }
 
 pub mod comandos {
@@ -145,7 +133,6 @@ pub mod comandos {
 
         let total_cols = rows.first().map(|r| r.len()).unwrap_or(0);
         let indices_criterios = detectar_columnas_criterio(&rows, &reservadas, total_cols);
-        let escala_max = detectar_escala_max(&rows, &indices_criterios);
 
         let mut datos_por_grupo: HashMap<String, HashMap<String, (f64, usize, Vec<f64>)>> =
             HashMap::new();
@@ -206,14 +193,13 @@ pub mod comandos {
 
             if count > 0 && !evaluado.is_empty() {
                 let prom_crudo = suma / count as f64;
-                let prom_7 = a_escala_7(prom_crudo, escala_max);
-                let redondeado = (prom_7 * 10.0).round() / 10.0;
+                let redondeado = (prom_crudo * 10.0).round() / 10.0;
                 let entrada = datos_por_grupo
                     .entry(grupo.clone())
                     .or_default()
                     .entry(evaluado.clone())
                     .or_insert((0.0, 0, Vec::new()));
-                entrada.0 += prom_7;
+                entrada.0 += prom_crudo;
                 entrada.1 += 1;
                 entrada.2.push(redondeado);
             }
@@ -292,11 +278,11 @@ pub mod comandos {
 
         let total_cols = rows.first().map(|r| r.len()).unwrap_or(0);
         let indices_criterios = detectar_columnas_criterio(&rows, &reservadas, total_cols);
+        // Solo se usa para determinar la nota máxima del fallback (sin evaluaciones recibidas)
         let escala_max = detectar_escala_max(&rows, &indices_criterios);
 
         let mut persona_a_grupo: HashMap<String, String> = HashMap::new();
 
-        // Pasada 1: mapa persona->grupo
         for (i, row) in rows.iter().enumerate() {
             if i == 0 {
                 continue;
@@ -324,9 +310,6 @@ pub mod comandos {
             }
         }
 
-        // Pasada 2: calcular notas filtrando evaluaciones inválidas
-        // Las sumas se acumulan ya en escala 1–7 para que el promedio final
-        // también quede en esa escala sin conversión adicional.
         let mut resumen: HashMap<String, (f64, usize, Vec<f64>, String)> = HashMap::new();
         let mut evaluaciones_invalidas: HashMap<String, usize> = HashMap::new();
         let mut a_quienes_evaluo_validos: HashMap<String, Vec<String>> = HashMap::new();
@@ -391,15 +374,14 @@ pub mod comandos {
 
                 if count > 0 {
                     let prom_crudo = suma / count as f64;
-                    let prom_7 = a_escala_7(prom_crudo, escala_max);
-                    let redondeado = (prom_7 * 10.0).round() / 10.0;
+                    let redondeado = (prom_crudo * 10.0).round() / 10.0;
                     let entrada = resumen.entry(evaluado.clone()).or_insert((
                         0.0,
                         0,
                         Vec::new(),
                         grupo_evaluado.clone(),
                     ));
-                    entrada.0 += prom_7;  // acumular en escala 7
+                    entrada.0 += prom_crudo;
                     entrada.1 += 1;
                     entrada.2.push(redondeado);
                 }
@@ -431,11 +413,11 @@ pub mod comandos {
 
                 super::NotaEstudiante {
                     identificacion: est,
-                    // suma ya está en escala 7, solo dividir por cantidad
                     nota_promedio: if cantidad > 0 {
                         Some((suma / cantidad as f64 * 10.0).round() / 10.0)
                     } else {
-                        None
+                        // Sin evaluaciones recibidas → nota máxima de la escala detectada
+                        Some(escala_max)
                     },
                     cantidad_evaluaciones: cantidad,
                     notas_individuales: notas,
