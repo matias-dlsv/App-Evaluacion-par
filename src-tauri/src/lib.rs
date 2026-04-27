@@ -25,6 +25,13 @@ pub struct NotaEstudiante {
     pub evaluaciones_invalidas: usize,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct AutoEvaluacion {
+    pub identificacion: String,
+    pub grupo: String,
+    pub nota_auto: Option<f64>,
+}
+
 fn limpiar_grupo_id(dato: &Data) -> String {
     let s = dato.to_string().trim().to_string();
     if s.ends_with(".0") {
@@ -278,7 +285,6 @@ pub mod comandos {
 
         let total_cols = rows.first().map(|r| r.len()).unwrap_or(0);
         let indices_criterios = detectar_columnas_criterio(&rows, &reservadas, total_cols);
-        // Solo se usa para determinar la nota máxima del fallback (sin evaluaciones recibidas)
         let escala_max = detectar_escala_max(&rows, &indices_criterios);
 
         let mut persona_a_grupo: HashMap<String, String> = HashMap::new();
@@ -416,7 +422,6 @@ pub mod comandos {
                     nota_promedio: if cantidad > 0 {
                         Some((suma / cantidad as f64 * 10.0).round() / 10.0)
                     } else {
-                        // Sin evaluaciones recibidas → nota máxima de la escala detectada
                         Some(escala_max)
                     },
                     cantidad_evaluaciones: cantidad,
@@ -430,6 +435,108 @@ pub mod comandos {
 
         Ok(resultados)
     }
+
+    #[command]
+    pub fn obtener_autoevaluaciones(ruta: String) -> Result<Vec<super::AutoEvaluacion>, String> {
+        let mut workbook =
+            open_workbook_auto(&ruta).map_err(|e| format!("Error al abrir: {:?}", e))?;
+
+        let sheet_name = workbook
+            .sheet_names()
+            .first()
+            .cloned()
+            .ok_or("Excel vacío")?;
+
+        let range = workbook
+            .worksheet_range(&sheet_name)
+            .map_err(|e| format!("Error: {:?}", e))?;
+
+        let rows: Vec<Vec<Data>> = range.rows().map(|r| r.to_vec()).collect();
+
+        let mut evaluado_idx = None;
+        let mut evaluador_idx = None;
+        let mut grupo_idx = None;
+        let mut reservadas: HashSet<usize> = HashSet::new();
+
+        if let Some(header) = rows.first() {
+            for (col_idx, celda) in header.iter().enumerate() {
+                let enc = celda.to_string().trim().to_uppercase().replace('\n', " ");
+                if enc.contains("EVALUADO") && !enc.contains("EVALUADOR") {
+                    evaluado_idx = Some(col_idx);
+                    reservadas.insert(col_idx);
+                } else if enc.contains("EVALUADOR") {
+                    evaluador_idx = Some(col_idx);
+                    reservadas.insert(col_idx);
+                } else if enc == "GRUPO" {
+                    grupo_idx = Some(col_idx);
+                    reservadas.insert(col_idx);
+                }
+            }
+        }
+
+        let total_cols = rows.first().map(|r| r.len()).unwrap_or(0);
+        let indices_criterios = detectar_columnas_criterio(&rows, &reservadas, total_cols);
+
+        let mut autoevaluaciones: HashMap<String, (f64, String)> = HashMap::new();
+
+        for (i, row) in rows.iter().enumerate() {
+            if i == 0 {
+                continue;
+            }
+
+            let evaluado = evaluado_idx
+                .and_then(|i| row.get(i))
+                .map(|d| d.to_string().trim().replace('/', " "))
+                .unwrap_or_default();
+            let evaluador = evaluador_idx
+                .and_then(|i| row.get(i))
+                .map(|d| d.to_string().trim().replace('/', " "))
+                .unwrap_or_default();
+            let grupo = grupo_idx
+                .and_then(|i| row.get(i))
+                .map(|d| limpiar_grupo_id(d))
+                .unwrap_or_default();
+
+            // Solo filas donde el evaluador se evaluó a sí mismo
+            if evaluado.is_empty() || evaluador.is_empty() || evaluado != evaluador {
+                continue;
+            }
+
+            let mut suma = 0.0;
+            let mut count = 0;
+            for &c in &indices_criterios {
+                if let Some(celda) = row.get(c) {
+                    match celda {
+                        Data::Float(n) => {
+                            suma += n;
+                            count += 1;
+                        }
+                        Data::Int(n) => {
+                            suma += *n as f64;
+                            count += 1;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+
+            if count > 0 {
+                let nota = (suma / count as f64 * 10.0).round() / 10.0;
+                autoevaluaciones.insert(evaluado, (nota, grupo));
+            }
+        }
+
+        let resultados = autoevaluaciones
+            .into_iter()
+            .map(|(id, (nota, grupo))| super::AutoEvaluacion {
+                identificacion: id,
+                grupo,
+                nota_auto: Some(nota),
+            })
+            .collect();
+
+        Ok(resultados)
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -437,10 +544,11 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_store::Builder::new().build()) // ← agregar
+        .plugin(tauri_plugin_store::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             comandos::procesar_respuestas,
             comandos::obtener_notas_par,
+            comandos::obtener_autoevaluaciones,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
