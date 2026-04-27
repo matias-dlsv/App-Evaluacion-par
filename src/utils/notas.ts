@@ -3,6 +3,7 @@
 export interface Estudiante {
   identificacion: string;
   notaPar?: number;
+  notaAuto?: number; // autoevaluación, solo para referencia del profesor
   evaluaciones?: number;
   notasIndividualesPar?: number[];
   nombresEvaluados?: string[];
@@ -15,7 +16,7 @@ export interface Estudiante {
   evaluacionesInvalidas?: number;
   proporcionBase?: number;
   proporcionConCastigo?: number;
-  descuentoManual?: boolean; // si true, los factores no se recalculan automáticamente
+  descuentoManual?: boolean;
 }
 
 export interface Grupo {
@@ -75,11 +76,9 @@ export function calcularNotasAjustadas(
       let factorCastigoNoEvaluo: number;
 
       if (est.descuentoManual) {
-        // Respetar valores editados manualmente
         factorCastigoFueraGrupo = est.factorCastigoFueraGrupo ?? 0;
         factorCastigoNoEvaluo = est.factorCastigoNoEvaluo ?? 0;
       } else {
-        // Calcular automáticamente
         const invalidas = est.evaluacionesInvalidas ?? 0;
         factorCastigoFueraGrupo =
           Math.round(Math.min(invalidas * config.maxCastigoFueraGrupo, 1) * 1000) / 1000;

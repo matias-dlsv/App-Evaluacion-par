@@ -17,6 +17,7 @@ import {
   exportarResultados,
   exportarCSVGrupo,
   exportarTodosCSVGrupos,
+  exportarAutoevaluaciones,
 } from "./utils/exportarExcel";
 
 interface NotaExtraida {
@@ -27,6 +28,12 @@ interface NotaExtraida {
   nombres_evaluados: string[];
   grupo: string;
   evaluaciones_invalidas: number;
+}
+
+interface AutoEvaluacion {
+  identificacion: string;
+  grupo: string;
+  nota_auto: number | null;
 }
 
 interface AppState {
@@ -182,6 +189,11 @@ function EditGrupo({ grupo, onSave, onCancel }: EditGrupoProps) {
               <th className="text-center py-2 px-2 font-semibold whitespace-nowrap">
                 Ev. Par
               </th>
+              <th className="text-center py-2 px-2 font-semibold whitespace-nowrap text-purple-600">
+                Auto
+                <br />
+                Eval.
+              </th>
               <th className="text-center py-2 px-2 font-semibold whitespace-nowrap text-orange-600">
                 Desc.
                 <br />
@@ -230,6 +242,15 @@ function EditGrupo({ grupo, onSave, onCancel }: EditGrupoProps) {
                     placeholder="—"
                     className="w-14 p-1 border border-gray-200 rounded text-xs text-center focus:ring-1 focus:ring-red-300 outline-none bg-white block mx-auto"
                   />
+                </td>
+                <td className="py-1.5 px-2 text-center">
+                  {est.notaAuto !== undefined ? (
+                    <span className="text-xs font-semibold text-purple-700 bg-purple-50 px-2 py-1 rounded border border-purple-100">
+                      {est.notaAuto}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-gray-300">—</span>
+                  )}
                 </td>
                 <td className="py-1.5 px-2">
                   <div className="flex flex-col items-center gap-0.5">
@@ -411,6 +432,15 @@ function App() {
       const notasExtraidas: NotaExtraida[] = await invoke("obtener_notas_par", {
         ruta: file,
       });
+      const autoevaluaciones: AutoEvaluacion[] = await invoke(
+        "obtener_autoevaluaciones",
+        { ruta: file },
+      );
+
+      // Mapa rápido de autoevaluaciones por identificación
+      const mapaAuto = new Map(
+        autoevaluaciones.map((a) => [a.identificacion, a.nota_auto]),
+      );
 
       const gruposConNotas = gruposExtraidos.map((grupo) => ({
         ...grupo,
@@ -418,15 +448,21 @@ function App() {
           const nota = notasExtraidas.find(
             (n) => n.identificacion === est.identificacion,
           );
-          if (!nota) return est;
+          const notaAuto = mapaAuto.get(est.identificacion);
           return {
             ...est,
             notaPar:
-              nota.nota_promedio !== null ? nota.nota_promedio : undefined,
-            evaluaciones: nota.cantidad_evaluaciones,
-            notasIndividualesPar: nota.notas_individuales,
-            nombresEvaluados: nota.nombres_evaluados,
-            evaluacionesInvalidas: nota.evaluaciones_invalidas,
+              nota?.nota_promedio !== null && nota?.nota_promedio !== undefined
+                ? nota.nota_promedio
+                : undefined,
+            evaluaciones: nota?.cantidad_evaluaciones,
+            notasIndividualesPar: nota?.notas_individuales,
+            nombresEvaluados: nota?.nombres_evaluados,
+            evaluacionesInvalidas: nota?.evaluaciones_invalidas,
+            notaAuto:
+              notaAuto !== null && notaAuto !== undefined
+                ? notaAuto
+                : undefined,
           };
         }),
       }));
@@ -615,6 +651,11 @@ function App() {
             ),
           );
 
+    // ¿Hay al menos un estudiante con autoevaluación en este curso?
+    const tieneAutoevaluaciones = cursoData.grupos.some((g) =>
+      g.estudiantes.some((e) => e.notaAuto !== undefined),
+    );
+
     return (
       <div className="min-h-screen bg-gray-50 p-8">
         <div className="w-full">
@@ -681,7 +722,7 @@ function App() {
                     className="fixed inset-0 z-10"
                     onClick={() => setMenuExportAbierto(false)}
                   />
-                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-100 z-20 overflow-hidden">
+                  <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-lg border border-gray-100 z-20 overflow-hidden">
                     {/* Excel completo */}
                     <button
                       onClick={async () => {
@@ -713,8 +754,7 @@ function App() {
 
                     <div className="border-t border-gray-100" />
 
-                    {/* CSV por grupo */}
-                    {/* Exportar todos los grupos como CSV */}
+                    {/* CSV todos los grupos en carpeta */}
                     <button
                       onClick={async () => {
                         setMenuExportAbierto(false);
@@ -745,6 +785,50 @@ function App() {
                         </p>
                       </div>
                     </button>
+
+                    {/* Autoevaluaciones — solo si hay datos */}
+                    {tieneAutoevaluaciones && (
+                      <>
+                        <div className="border-t border-gray-100" />
+                        <button
+                          onClick={async () => {
+                            setMenuExportAbierto(false);
+                            try {
+                              const ok =
+                                await exportarAutoevaluaciones(cursoData);
+                              if (ok)
+                                alert(
+                                  "¡Autoevaluaciones exportadas con éxito!",
+                                );
+                            } catch (e) {
+                              alert("Error al exportar: " + String(e));
+                            }
+                          }}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition text-left"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 16 16"
+                            fill="currentColor"
+                            className="w-4 h-4 text-purple-500 shrink-0"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M15 8A7 7 0 1 1 1 8a7 7 0 0 1 14 0Zm-5-2a2 2 0 1 1-4 0 2 2 0 0 1 4 0ZM8 9c-1.825 0-3.422.977-4.295 2.437A5.49 5.49 0 0 0 8 13.5a5.49 5.49 0 0 0 4.294-2.063A4.997 4.997 0 0 0 8 9Z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                          <div>
+                            <p className="font-semibold">
+                              CSV autoevaluaciones
+                            </p>
+                            <p className="text-[11px] text-gray-400">
+                              Auto vs nota par por alumno
+                            </p>
+                          </div>
+                        </button>
+                      </>
+                    )}
 
                     <div className="border-t border-gray-100" />
                     <div className="px-4 py-2">
@@ -1077,6 +1161,11 @@ function App() {
                               <br />
                               Par
                             </th>
+                            <th className="text-center px-3 py-2 whitespace-nowrap text-purple-500">
+                              Auto
+                              <br />
+                              Eval.
+                            </th>
                             <th className="text-center px-3 py-2 whitespace-nowrap text-orange-500">
                               Desc.
                               <br />
@@ -1124,6 +1213,17 @@ function App() {
                                 {est.notaPar !== undefined ? (
                                   <span className="font-bold text-green-700 bg-green-50 px-2 py-0.5 rounded border border-green-100 text-xs">
                                     {est.notaPar}
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-300 text-xs">
+                                    —
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-3 py-2.5 text-center">
+                                {est.notaAuto !== undefined ? (
+                                  <span className="font-semibold text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-100 text-xs">
+                                    {est.notaAuto}
                                   </span>
                                 ) : (
                                   <span className="text-gray-300 text-xs">

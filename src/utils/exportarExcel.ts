@@ -2,6 +2,7 @@
 import ExcelJS from 'exceljs';
 import { save, open } from '@tauri-apps/plugin-dialog';
 import { writeFile, mkdir } from '@tauri-apps/plugin-fs';
+import { join } from '@tauri-apps/api/path';
 import { Curso } from './notas';
 
 export async function exportarResultados(curso: Curso) {
@@ -21,7 +22,6 @@ export async function exportarResultados(curso: Curso) {
       throw new Error("No se encontraron las hojas en la plantilla. Revisa los nombres.");
     }
 
-    // Mapa nombre -> grupo (número) para verificación en hoja 3
     const mapaGrupos = new Map<string, number>();
     const todosLosEstudiantes: {
       nombre: string;
@@ -43,18 +43,13 @@ export async function exportarResultados(curso: Curso) {
       });
     });
 
-    todosLosEstudiantes.sort((a, b) => 
-  a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base', numeric: true })
-);
+    todosLosEstudiantes.sort((a, b) =>
+      a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base', numeric: true })
+    );
 
-    // --- HOJA 1: Lista y notas ponderadas ---
-    // Encabezado en fila 1 (ya en plantilla), datos desde fila 2
-    // A=Nombre, B=Grupo, C=Nota bruta, D=Eval Par,
-    // E=Proporción base, F=Factor Castigo, G=Proporción con Castigo, H=Nota Ajustada
     todosLosEstudiantes.forEach((item, i) => {
       const fila = i + 2;
       const est = item.est;
-
       sheet1.getCell(`A${fila}`).value = item.nombre;
       sheet1.getCell(`B${fila}`).value = item.grupo;
       sheet1.getCell(`C${fila}`).value = item.notaGrupo || null;
@@ -65,35 +60,21 @@ export async function exportarResultados(curso: Curso) {
       sheet1.getCell(`H${fila}`).value = est.notaConDescuento ?? null;
     });
 
-    // --- HOJA 2: Notas evaluaciones par ---
-    // Fila 1 = encabezado principal, fila 2 = sub-encabezado (1,2,3,4,5)
-    // Datos desde fila 3
-    // A=Nombre, B=Grupo, C-G=notas individuales 1-5, H=Promedio
     todosLosEstudiantes.forEach((item, i) => {
       const fila = i + 3;
       const est = item.est;
-
       sheet2.getCell(`A${fila}`).value = item.nombre;
       sheet2.getCell(`B${fila}`).value = item.grupo;
-
       const notas: number[] = est.notasIndividualesPar || [];
       notas.forEach((nota, idx) => {
         if (idx < 5) {
-          const col = String.fromCharCode(67 + idx); // C, D, E, F, G
+          const col = String.fromCharCode(67 + idx);
           sheet2.getCell(`${col}${fila}`).value = nota;
         }
       });
-
       sheet2.getCell(`H${fila}`).value = est.notaPar ?? null;
     });
 
-    // --- HOJA 3: Verificacion y castigos ---
-    // Fila 1 = encabezado principal, fila 2 = sub-encabezado
-    // Datos desde fila 3
-    // A=Nombre, B=Grupo, C-H=compañeros evaluados (hasta 6),
-    // I=Restantes, J=Castigo no evaluados,
-    // K-O=Grupo adecuado de cada compañero (hasta 5),
-    // P=Castigo ev. inválida, Q=Castigo total
     todosLosEstudiantes.forEach((item, i) => {
       const fila = i + 3;
       const est = item.est;
@@ -107,39 +88,30 @@ export async function exportarResultados(curso: Curso) {
       sheet3.getCell(`A${fila}`).value = item.nombre;
       sheet3.getCell(`B${fila}`).value = item.grupo;
 
-      // Compañeros evaluados (C-H, hasta 6)
       nombresEvaluados.forEach((nombre, idx) => {
         if (idx < 6) {
-          const col = String.fromCharCode(67 + idx); // C, D, E, F, G, H
+          const col = String.fromCharCode(67 + idx);
           sheet3.getCell(`${col}${fila}`).value = nombre;
         }
       });
 
-      // Restantes no evaluados
       const noEvaluados = Math.max(0, companerosSinElMismo - nombresEvaluados.length);
       sheet3.getCell(`I${fila}`).value = noEvaluados;
-
-      // Castigo por no evaluar
       sheet3.getCell(`J${fila}`).value = est.factorCastigoNoEvaluo ?? null;
 
-      // Grupo adecuado para cada compañero evaluado (K-O, hasta 5)
       nombresEvaluados.forEach((nombre, idx) => {
         if (idx < 5) {
-          const col = String.fromCharCode(75 + idx); // K, L, M, N, O
+          const col = String.fromCharCode(75 + idx);
           const grupoEvaluado = mapaGrupos.get(nombre.trim().toUpperCase());
           const esValido = grupoEvaluado !== undefined && grupoEvaluado === item.grupo;
           sheet3.getCell(`${col}${fila}`).value = esValido ? "OK" : "Inválido";
         }
       });
 
-      // Castigo por evaluaciones inválidas
       sheet3.getCell(`P${fila}`).value = est.factorCastigoFueraGrupo ?? null;
-
-      // Castigo total
       sheet3.getCell(`Q${fila}`).value = est.factorCastigoTotal ?? null;
     });
 
-    // --- GUARDAR ---
     const bufferSalida = await workbook.xlsx.writeBuffer();
     const filePath = await save({
       filters: [{ name: 'Excel Workbook', extensions: ['xlsx'] }],
@@ -178,7 +150,6 @@ export async function exportarCSVGrupo(curso: Curso, grupoNumero: string) {
   });
 
   const csv = filas.map(f => f.map(c => `"${c}"`).join(",")).join("\n");
-
   const filePath = await save({
     filters: [{ name: "CSV", extensions: ["csv"] }],
     defaultPath: `${curso.nombre} - Grupo ${grupoNumero}.csv`,
@@ -200,9 +171,8 @@ export async function exportarTodosCSVGrupos(curso: Curso) {
 
   if (!folder) return false;
 
-  // Crea la subcarpeta dentro de la carpeta elegida
   const nombreCarpeta = `${curso.nombre.replace(/[\\/:*?"<>|]/g, '_')} - Grupos`;
-  const rutaCarpeta = `${folder}/${nombreCarpeta}`;
+  const rutaCarpeta = await join(folder as string, nombreCarpeta);
 
   await mkdir(rutaCarpeta, { recursive: true });
 
@@ -225,10 +195,53 @@ export async function exportarTodosCSVGrupos(curso: Curso) {
     });
 
     const csv = filas.map(f => f.map(c => `"${c}"`).join(",")).join("\n");
-    const nombreArchivo = `Grupo ${grupo.numero}.csv`;
-
-    await writeFile(`${rutaCarpeta}/${nombreArchivo}`, encoder.encode(csv));
+    const rutaArchivo = await join(rutaCarpeta, `Grupo ${grupo.numero}.csv`);
+    await writeFile(rutaArchivo, encoder.encode(csv));
   }
 
   return true;
+}
+
+export async function exportarAutoevaluaciones(curso: Curso) {
+  const filas: string[][] = [
+    ["Nombre", "Grupo", "Nota Autoevaluación", "Nota Par", "Diferencia (Auto - Par)"]
+  ];
+
+  const todosLosEstudiantes = curso.grupos.flatMap(g =>
+    g.estudiantes.map(est => ({ est, grupo: g }))
+  );
+
+  todosLosEstudiantes.sort((a, b) =>
+    a.est.identificacion.localeCompare(b.est.identificacion, 'es')
+  );
+
+  todosLosEstudiantes.forEach(({ est, grupo }) => {
+    const notaAuto = est.notaAuto ?? null;
+    const notaPar = est.notaPar ?? null;
+    const diff =
+      notaAuto !== null && notaPar !== null
+        ? (Math.round((notaAuto - notaPar) * 100) / 100).toString()
+        : "";
+
+    filas.push([
+      est.identificacion,
+      grupo.numero,
+      notaAuto !== null ? notaAuto.toString() : "Sin autoevaluación",
+      notaPar !== null ? notaPar.toString() : "—",
+      diff,
+    ]);
+  });
+
+  const csv = filas.map(f => f.map(c => `"${c}"`).join(",")).join("\n");
+  const filePath = await save({
+    filters: [{ name: "CSV", extensions: ["csv"] }],
+    defaultPath: `${curso.nombre} - Autoevaluaciones.csv`,
+  });
+
+  if (filePath) {
+    const encoder = new TextEncoder();
+    await writeFile(filePath, encoder.encode(csv));
+    return true;
+  }
+  return false;
 }
