@@ -1308,7 +1308,7 @@ function App() {
             <img
               src={logoUandes}
               alt="Universidad de los Andes"
-              className="h-8 w-auto"
+              className="h-25 w-auto"
             />
           </div>
           <h1 className="text-4xl font-extrabold tracking-tight text-white drop-shadow">
