@@ -1,7 +1,7 @@
 // src/utils/exportarExcel.ts
 import ExcelJS from 'exceljs';
 import { save, open } from '@tauri-apps/plugin-dialog';
-import { writeFile } from '@tauri-apps/plugin-fs';
+import { writeFile, mkdir } from '@tauri-apps/plugin-fs';
 import { Curso } from './notas';
 
 export async function exportarResultados(curso: Curso) {
@@ -195,10 +195,16 @@ export async function exportarCSVGrupo(curso: Curso, grupoNumero: string) {
 export async function exportarTodosCSVGrupos(curso: Curso) {
   const folder = await open({
     directory: true,
-    title: "Selecciona la carpeta donde guardar los CSV",
+    title: "Selecciona dónde guardar la carpeta de resultados",
   });
 
   if (!folder) return false;
+
+  // Crea la subcarpeta dentro de la carpeta elegida
+  const nombreCarpeta = `${curso.nombre} - Grupos`;
+  const rutaCarpeta = `${folder}/${nombreCarpeta}`;
+
+  await mkdir(rutaCarpeta, { recursive: true });
 
   const encoder = new TextEncoder();
 
@@ -219,10 +225,9 @@ export async function exportarTodosCSVGrupos(curso: Curso) {
     });
 
     const csv = filas.map(f => f.map(c => `"${c}"`).join(",")).join("\n");
-    const nombreArchivo = `${curso.nombre} - Grupo ${grupo.numero}.csv`;
-    const filePath = `${folder}/${nombreArchivo}`;
+    const nombreArchivo = `Grupo ${grupo.numero}.csv`;
 
-    await writeFile(filePath, encoder.encode(csv));
+    await writeFile(`${rutaCarpeta}/${nombreArchivo}`, encoder.encode(csv));
   }
 
   return true;
