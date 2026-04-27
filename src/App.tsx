@@ -1304,11 +1304,11 @@ function App() {
       <div className="w-1/3 bg-[#ce0019] p-8 shadow-lg flex flex-col gap-6 border-r border-red-900 z-10 text-white">
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2 mb-1">
-            <div className="w-16 h-8 rounded-full bg-white flex items-center justify-center shadow">
-              <span className="text-[#ce0019] font-extrabold text-xs leading-none">
-                UANDES
-              </span>
-            </div>
+            <img
+              src="/logo-uandes.png"
+              alt="Universidad de los Andes"
+              className="h-25 w-auto"
+            />
           </div>
           <h1 className="text-4xl font-extrabold tracking-tight text-white drop-shadow">
             DIO
