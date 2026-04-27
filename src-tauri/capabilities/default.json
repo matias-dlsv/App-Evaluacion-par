@@ -9,8 +9,22 @@
     "core:default",
     "dialog:default",
     "dialog:allow-open",
+    "dialog:allow-save",
     "fs:default",
     "fs:write-all",
-    "store:default"
+    "fs:allow-mkdir",
+    "fs:allow-write-file",
+    "store:default",
+    {
+      "identifier": "fs:scope",
+      "allow": [
+        { "path": "$HOME/**" },
+        { "path": "$DESKTOP/**" },
+        { "path": "$DOCUMENT/**" },
+        { "path": "$DOWNLOAD/**" },
+        { "path": "$APPDATA/**" },
+        { "path": "$TEMP/**" }
+      ]
+    }
   ]
 }

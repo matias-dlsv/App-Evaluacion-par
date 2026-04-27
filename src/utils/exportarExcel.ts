@@ -201,7 +201,7 @@ export async function exportarTodosCSVGrupos(curso: Curso) {
   if (!folder) return false;
 
   // Crea la subcarpeta dentro de la carpeta elegida
-  const nombreCarpeta = `${curso.nombre} - Grupos`;
+  const nombreCarpeta = `${curso.nombre.replace(/[\\/:*?"<>|]/g, '_')} - Grupos`;
   const rutaCarpeta = `${folder}/${nombreCarpeta}`;
 
   await mkdir(rutaCarpeta, { recursive: true });
