@@ -1,6 +1,6 @@
 // src/utils/exportarExcel.ts
 import ExcelJS from 'exceljs';
-import { save } from '@tauri-apps/plugin-dialog';
+import { save, open } from '@tauri-apps/plugin-dialog';
 import { writeFile } from '@tauri-apps/plugin-fs';
 import { Curso } from './notas';
 
@@ -157,6 +157,7 @@ export async function exportarResultados(curso: Curso) {
     throw error;
   }
 }
+
 export async function exportarCSVGrupo(curso: Curso, grupoNumero: string) {
   const grupo = curso.grupos.find(g => g.numero === grupoNumero);
   if (!grupo) throw new Error("Grupo no encontrado");
@@ -189,4 +190,40 @@ export async function exportarCSVGrupo(curso: Curso, grupoNumero: string) {
     return true;
   }
   return false;
+}
+
+export async function exportarTodosCSVGrupos(curso: Curso) {
+  const folder = await open({
+    directory: true,
+    title: "Selecciona la carpeta donde guardar los CSV",
+  });
+
+  if (!folder) return false;
+
+  const encoder = new TextEncoder();
+
+  for (const grupo of curso.grupos) {
+    const filas: string[][] = [
+      ["Nombre", "Nota Bruta", "Ev. Par", "Desc. No Evaluó", "Desc. Grupo Ajeno", "Nota Final"]
+    ];
+
+    grupo.estudiantes.forEach(est => {
+      filas.push([
+        est.identificacion,
+        grupo.promedio_bruto?.toString() ?? "",
+        est.notaPar?.toString() ?? "",
+        est.factorCastigoNoEvaluo?.toString() ?? "",
+        est.factorCastigoFueraGrupo?.toString() ?? "",
+        est.notaConDescuento?.toString() ?? "",
+      ]);
+    });
+
+    const csv = filas.map(f => f.map(c => `"${c}"`).join(",")).join("\n");
+    const nombreArchivo = `${curso.nombre} - Grupo ${grupo.numero}.csv`;
+    const filePath = `${folder}/${nombreArchivo}`;
+
+    await writeFile(filePath, encoder.encode(csv));
+  }
+
+  return true;
 }
