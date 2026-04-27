@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { load } from "@tauri-apps/plugin-store";
 import { create } from "zustand";
+import logoUandes from "./assets/logo-uandes.png";
 import "./App.css";
 import {
   Curso,
@@ -1305,9 +1306,9 @@ function App() {
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2 mb-1">
             <img
-              src="/logo-uandes.png"
+              src={logoUandes}
               alt="Universidad de los Andes"
-              className="h-25 w-auto"
+              className="h-8 w-auto"
             />
           </div>
           <h1 className="text-4xl font-extrabold tracking-tight text-white drop-shadow">
