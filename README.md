@@ -1,5 +1,5 @@
 # EquiPar
-**Plataforma de Evaluación Par — Universidad de los Andes**
+**Plataforma de Evaluación Par - Universidad de los Andes**
 
 EquiPar es una aplicación de escritorio para gestionar y calcular notas de evaluación entre pares en cursos universitarios. Permite cargar respuestas desde Excel o CSV, calcular notas ajustadas con penalizaciones configurables, y exportar resultados por grupo o curso completo.
 
