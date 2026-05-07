@@ -12,7 +12,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [macos-latest, ubuntu-22.04, windows-latest]
+        include:
+          - platform: macos-latest       # Apple Silicon (M1/M2/M3)
+            args: "--target aarch64-apple-darwin"
+          - platform: macos-13           # Intel (pre-2020)
+            args: "--target x86_64-apple-darwin"
+          - platform: ubuntu-22.04
+            args: ""
+          - platform: windows-latest
+            args: ""
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -30,6 +38,8 @@ jobs:
 
       - name: Instalar Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin' || matrix.platform == 'macos-13' && 'x86_64-apple-darwin' || '' }}
 
       - name: Cachear Rust para que compile más rápido
         uses: swatinem/rust-cache@v2
@@ -43,6 +53,7 @@ jobs:
         with:
           tagName: app-v__VERSION__
           releaseName: "EquiPar v__VERSION__"
+          args: ${{ matrix.args }}
           releaseBody: |
             ## EquiPar v__VERSION__
 
@@ -51,10 +62,10 @@ jobs:
             | Sistema | Archivo |
             |---------|---------|
             | 🪟 Windows | `EquiPar___VERSION___x64-setup.exe` |
-            | 🍎 Mac (Apple Silicon) | `EquiPar___VERSION___aarch64.dmg` |
+            | 🍎 Mac Apple Silicon (M1/M2/M3) | `EquiPar___VERSION___aarch64.dmg` |
+            | 🍎 Mac Intel (pre-2020) | `EquiPar___VERSION___x64.dmg` |
             | 🐧 Linux | `EquiPar___VERSION___amd64.AppImage` |
 
-            > **Mac Intel** (más antiguo): usa el archivo `.dmg` con `x64` en el nombre si aparece.
             > **Linux avanzado**: también disponibles `.deb` y `.rpm` más abajo.
           releaseDraft: true
           prerelease: false
