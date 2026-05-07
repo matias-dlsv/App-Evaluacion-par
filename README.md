@@ -14,7 +14,8 @@ Descarga el instalador correspondiente a tu sistema operativo desde la sección 
 | 🪟 Windows | `EquiPar_x.x.x_x64-setup.exe` |
 | 🍎 Mac Apple Silicon (M1/M2/M3) | `EquiPar_x.x.x_aarch64.dmg` |
 | 🍎 Mac Intel (pre-2020) | `EquiPar_x.x.x_x64.dmg` |
-| 🐧 Linux | `EquiPar_x.x.x_amd64.AppImage` |
+| 🐧 Linux (AppImage) | `EquiPar_x.x.x_amd64.AppImage` |
+| 🐧 Linux (Debian/Ubuntu) | `EquiPar_x.x.x_amd64.deb` |
 
 ---
 
@@ -55,8 +56,12 @@ Descarga el instalador correspondiente a tu sistema operativo desde la sección 
 
 ### 🐧 Linux
 
+Tienes dos opciones según tu preferencia:
+
+**Opción A — AppImage** (universal, sin instalación):
+
 1. Descarga el archivo `EquiPar_x.x.x_amd64.AppImage`.
-2. Dale permisos de ejecución. Puedes hacerlo de dos formas:
+2. Dale permisos de ejecución:
    - **Desde el explorador de archivos:** clic derecho → Propiedades → Permisos → activar _"Permitir ejecutar el archivo como programa"_.
    - **Desde la terminal:**
      ```bash
@@ -67,7 +72,18 @@ Descarga el instalador correspondiente a tu sistema operativo desde la sección 
    ./EquiPar_*.AppImage
    ```
 
-> El AppImage no requiere instalación ni permisos de administrador. Funciona en Ubuntu, Fedora, Arch y la mayoría de distribuciones modernas.
+> No requiere instalación ni permisos de administrador. Funciona en Ubuntu, Fedora, Arch y la mayoría de distribuciones modernas.
+
+**Opción B — `.deb`** (Ubuntu, Debian y derivados):
+
+1. Descarga el archivo `EquiPar_x.x.x_amd64.deb`.
+2. Instálalo desde la terminal:
+   ```bash
+   sudo dpkg -i EquiPar_*.deb
+   ```
+3. Una vez instalado, la app aparecerá en el menú de aplicaciones como **EquiPar**.
+
+> Para desinstalarla: `sudo dpkg -r equipar`
 
 ---
 
