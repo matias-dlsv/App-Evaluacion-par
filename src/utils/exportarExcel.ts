@@ -130,40 +130,54 @@ export async function exportarResultados(curso: Curso) {
   }
 }
 
-export async function exportarCSVGrupo(curso: Curso, grupoNumero: string) {
+export async function exportarXLSXGrupo(curso: Curso, grupoNumero: string) {
   const grupo = curso.grupos.find(g => g.numero === grupoNumero);
   if (!grupo) throw new Error("Grupo no encontrado");
 
-  const filas: string[][] = [
-    ["Nombre", "Nota Bruta", "Ev. Par", "Desc. No Evaluó", "Desc. Grupo Ajeno", "Nota Final"]
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet(`Grupo ${grupoNumero}`);
+
+  sheet.columns = [
+    { header: 'Nombre', key: 'nombre', width: 30 },
+    { header: 'Nota Bruta', key: 'notaBruta', width: 14 },
+    { header: 'Ev. Par', key: 'evPar', width: 12 },
+    { header: 'Desc. No Evaluó', key: 'descNoEvaluo', width: 18 },
+    { header: 'Desc. Grupo Ajeno', key: 'descGrupoAjeno', width: 20 },
+    { header: 'Nota Final', key: 'notaFinal', width: 14 },
   ];
 
-  grupo.estudiantes.forEach(est => {
-    filas.push([
-      est.identificacion,
-      grupo.promedio_bruto?.toString() ?? "",
-      est.notaPar?.toString() ?? "",
-      est.factorCastigoNoEvaluo?.toString() ?? "",
-      est.factorCastigoFueraGrupo?.toString() ?? "",
-      est.notaConDescuento?.toString() ?? "",
-    ]);
+  // Estilo del encabezado
+  sheet.getRow(1).eachCell(cell => {
+    cell.font = { bold: true, name: 'Arial' };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9E1F2' } };
+    cell.alignment = { horizontal: 'center' };
   });
 
-  const csv = filas.map(f => f.map(c => `"${c}"`).join(",")).join("\n");
+  grupo.estudiantes.forEach(est => {
+    sheet.addRow({
+      nombre: est.identificacion,
+      notaBruta: grupo.promedio_bruto ?? null,
+      evPar: est.notaPar ?? null,
+      descNoEvaluo: est.factorCastigoNoEvaluo ?? null,
+      descGrupoAjeno: est.factorCastigoFueraGrupo ?? null,
+      notaFinal: est.notaConDescuento ?? null,
+    });
+  });
+
+  const bufferSalida = await workbook.xlsx.writeBuffer();
   const filePath = await save({
-    filters: [{ name: "CSV", extensions: ["csv"] }],
-    defaultPath: `${curso.nombre} - Grupo ${grupoNumero}.csv`,
+    filters: [{ name: 'Excel Workbook', extensions: ['xlsx'] }],
+    defaultPath: `${curso.nombre} - Grupo ${grupoNumero}.xlsx`,
   });
 
   if (filePath) {
-    const encoder = new TextEncoder();
-    await writeFile(filePath, encoder.encode(csv));
+    await writeFile(filePath, new Uint8Array(bufferSalida));
     return true;
   }
   return false;
 }
 
-export async function exportarTodosCSVGrupos(curso: Curso) {
+export async function exportarTodosXLSXGrupos(curso: Curso) {
   const folder = await open({
     directory: true,
     title: "Selecciona dónde guardar la carpeta de resultados",
@@ -176,71 +190,105 @@ export async function exportarTodosCSVGrupos(curso: Curso) {
 
   await mkdir(rutaCarpeta, { recursive: true });
 
-  const encoder = new TextEncoder();
-
   for (const grupo of curso.grupos) {
-    const filas: string[][] = [
-      ["Nombre", "Nota Bruta", "Ev. Par", "Desc. No Evaluó", "Desc. Grupo Ajeno", "Nota Final"]
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet(`Grupo ${grupo.numero}`);
+
+    sheet.columns = [
+      { header: 'Nombre', key: 'nombre', width: 30 },
+      { header: 'Nota Bruta', key: 'notaBruta', width: 14 },
+      { header: 'Ev. Par', key: 'evPar', width: 12 },
+      { header: 'Desc. No Evaluó', key: 'descNoEvaluo', width: 18 },
+      { header: 'Desc. Grupo Ajeno', key: 'descGrupoAjeno', width: 20 },
+      { header: 'Nota Final', key: 'notaFinal', width: 14 },
     ];
 
-    grupo.estudiantes.forEach(est => {
-      filas.push([
-        est.identificacion,
-        grupo.promedio_bruto?.toString() ?? "",
-        est.notaPar?.toString() ?? "",
-        est.factorCastigoNoEvaluo?.toString() ?? "",
-        est.factorCastigoFueraGrupo?.toString() ?? "",
-        est.notaConDescuento?.toString() ?? "",
-      ]);
+    sheet.getRow(1).eachCell(cell => {
+      cell.font = { bold: true, name: 'Arial' };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9E1F2' } };
+      cell.alignment = { horizontal: 'center' };
     });
 
-    const csv = filas.map(f => f.map(c => `"${c}"`).join(",")).join("\n");
-    const rutaArchivo = await join(rutaCarpeta, `Grupo ${grupo.numero}.csv`);
-    await writeFile(rutaArchivo, encoder.encode(csv));
+    grupo.estudiantes.forEach(est => {
+      sheet.addRow({
+        nombre: est.identificacion,
+        notaBruta: grupo.promedio_bruto ?? null,
+        evPar: est.notaPar ?? null,
+        descNoEvaluo: est.factorCastigoNoEvaluo ?? null,
+        descGrupoAjeno: est.factorCastigoFueraGrupo ?? null,
+        notaFinal: est.notaConDescuento ?? null,
+      });
+    });
+
+    const bufferSalida = await workbook.xlsx.writeBuffer();
+    const rutaArchivo = await join(rutaCarpeta, `Grupo ${grupo.numero}.xlsx`);
+    await writeFile(rutaArchivo, new Uint8Array(bufferSalida));
   }
 
   return true;
 }
 
 export async function exportarAutoevaluaciones(curso: Curso) {
-  const filas: string[][] = [
-    ["Nombre", "Grupo", "Nota Autoevaluación", "Nota Par", "Diferencia (Auto - Par)"]
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('Autoevaluaciones');
+
+  sheet.columns = [
+    { header: 'Nombre', key: 'nombre', width: 30 },
+    { header: 'Grupo', key: 'grupo', width: 10 },
+    { header: 'Nota Autoevaluación', key: 'notaAuto', width: 22 },
+    { header: 'Nota Par', key: 'notaPar', width: 14 },
+    { header: 'Diferencia (Auto - Par)', key: 'diferencia', width: 24 },
   ];
+
+  sheet.getRow(1).eachCell(cell => {
+    cell.font = { bold: true, name: 'Arial' };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9E1F2' } };
+    cell.alignment = { horizontal: 'center' };
+  });
 
   const todosLosEstudiantes = curso.grupos.flatMap(g =>
     g.estudiantes.map(est => ({ est, grupo: g }))
   );
 
-  todosLosEstudiantes.sort((a, b) =>
-    a.est.identificacion.localeCompare(b.est.identificacion, 'es')
-  );
+  // Ordenar de mayor a menor diferencia (Auto - Par).
+  // Alumnos sin ambas notas quedan al final.
+  todosLosEstudiantes.sort((a, b) => {
+    const difA =
+      a.est.notaAuto != null && a.est.notaPar != null
+        ? a.est.notaAuto - a.est.notaPar
+        : -Infinity;
+    const difB =
+      b.est.notaAuto != null && b.est.notaPar != null
+        ? b.est.notaAuto - b.est.notaPar
+        : -Infinity;
+    return difB - difA;
+  });
 
   todosLosEstudiantes.forEach(({ est, grupo }) => {
     const notaAuto = est.notaAuto ?? null;
     const notaPar = est.notaPar ?? null;
-    const diff =
+    const diferencia =
       notaAuto !== null && notaPar !== null
-        ? (Math.round((notaAuto - notaPar) * 100) / 100).toString()
-        : "";
+        ? Math.round((notaAuto - notaPar) * 100) / 100
+        : null;
 
-    filas.push([
-      est.identificacion,
-      grupo.numero,
-      notaAuto !== null ? notaAuto.toString() : "Sin autoevaluación",
-      notaPar !== null ? notaPar.toString() : "—",
-      diff,
-    ]);
+    sheet.addRow({
+      nombre: est.identificacion,
+      grupo: grupo.numero,
+      notaAuto: notaAuto !== null ? notaAuto : 'Sin autoevaluación',
+      notaPar: notaPar !== null ? notaPar : '—',
+      diferencia: diferencia !== null ? diferencia : '',
+    });
   });
 
-  const csv = filas.map(f => f.map(c => `"${c}"`).join(",")).join("\n");
+  const bufferSalida = await workbook.xlsx.writeBuffer();
   const filePath = await save({
-    filters: [{ name: "CSV", extensions: ["csv"] }],
-    defaultPath: `${curso.nombre} - Autoevaluaciones.csv`,
+    filters: [{ name: 'Excel Workbook', extensions: ['xlsx'] }],
+    defaultPath: `${curso.nombre} - Autoevaluaciones.xlsx`,
   });
 
   if (filePath) {
-    const encoder = new TextEncoder();
-    await writeFile(filePath, encoder.encode(csv));
+    await writeFile(filePath, new Uint8Array(bufferSalida));
     return true;
   }
   return false;
