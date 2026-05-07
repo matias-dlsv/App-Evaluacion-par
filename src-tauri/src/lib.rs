@@ -43,6 +43,66 @@ fn limpiar_grupo_id(dato: &Data) -> String {
     }
 }
 
+/// Detecta los índices de las columnas clave (evaluador, evaluado, grupo) y marca
+/// como reservadas todas las columnas que NO son criterios de puntaje, incluyendo
+/// columnas de metadatos (timestamp, correo, comentarios) que en CSV se leen como
+/// Float y confundirían a `detectar_columnas_criterio`.
+struct IndicesColumnas {
+    evaluado: Option<usize>,
+    evaluador: Option<usize>,
+    grupo: Option<usize>,
+    reservadas: HashSet<usize>,
+}
+
+fn detectar_indices_columnas(header: &[Data]) -> IndicesColumnas {
+    let mut evaluado = None;
+    let mut evaluador = None;
+    let mut grupo = None;
+    let mut reservadas: HashSet<usize> = HashSet::new();
+
+    for (col_idx, celda) in header.iter().enumerate() {
+        let enc = celda
+            .to_string()
+            .trim()
+            .to_uppercase()
+            .replace('\n', " ")
+            .replace('\r', "");
+
+        if enc.contains("EVALUADO") && !enc.contains("EVALUADOR") {
+            evaluado = Some(col_idx);
+            reservadas.insert(col_idx);
+        } else if enc.contains("EVALUADOR") {
+            evaluador = Some(col_idx);
+            reservadas.insert(col_idx);
+        } else if enc == "GRUPO" {
+            grupo = Some(col_idx);
+            reservadas.insert(col_idx);
+        } else if enc.contains("TEMPORAL")      // "Marca temporal" → Float en CSV
+            || enc.contains("TIMESTAMP")
+            || enc.contains("FECHA")
+            || enc.contains("CORREO")           // "Dirección de correo electrónico"
+            || enc.contains("EMAIL")
+            || enc.contains("MAIL")
+            || enc.contains("COMENTARIO")       // "¿Desea agregar algún comentario?"
+            || enc.contains("COMMENT")
+            || enc.contains("DESEA")
+            || enc.contains("AGREGAR")
+        {
+            // Columnas de metadatos: en Excel pueden ser Date/String, pero en CSV
+            // el timestamp llega como Float grande (p.ej. 45913.7…) y contaminaría
+            // los cálculos de criterios si no se excluye explícitamente.
+            reservadas.insert(col_idx);
+        }
+    }
+
+    IndicesColumnas {
+        evaluado,
+        evaluador,
+        grupo,
+        reservadas,
+    }
+}
+
 fn detectar_columnas_criterio(
     rows: &[Vec<Data>],
     reservadas: &HashSet<usize>,
@@ -109,7 +169,6 @@ fn abrir_como_rows(ruta: &str) -> Result<Vec<Vec<Data>>, String> {
             .read_to_string(&mut contenido)
             .map_err(|e| format!("Error al leer CSV: {:?}", e))?;
 
-        // Si la primera línea usa ';' y no comas, normalizar todo el archivo
         let usa_punto_coma = contenido
             .lines()
             .next()
@@ -122,8 +181,6 @@ fn abrir_como_rows(ruta: &str) -> Result<Vec<Vec<Data>>, String> {
             contenido
         };
 
-        // Escribir a un archivo temporal con extensión .csv para que
-        // open_workbook_auto lo detecte correctamente
         let ruta_tmp = std::env::temp_dir().join("equipar_tmp_import.csv");
         std::fs::write(&ruta_tmp, contenido_normalizado.as_bytes())
             .map_err(|e| format!("Error al escribir CSV temporal: {:?}", e))?;
@@ -158,35 +215,13 @@ pub mod comandos {
     pub fn procesar_respuestas(ruta: String) -> Result<Vec<Grupo>, String> {
         let rows = abrir_como_rows(&ruta)?;
 
-        let mut evaluado_idx: Option<usize> = None;
-        let mut evaluador_idx: Option<usize> = None;
-        let mut grupo_idx: Option<usize> = None;
-        let mut reservadas: HashSet<usize> = HashSet::new();
-
-        if let Some(header) = rows.first() {
-            for (col_idx, celda) in header.iter().enumerate() {
-                let enc = celda
-                    .to_string()
-                    .trim()
-                    .to_uppercase()
-                    .replace('\n', " ")
-                    .replace('\r', "");
-
-                if enc.contains("EVALUADO") && !enc.contains("EVALUADOR") {
-                    evaluado_idx = Some(col_idx);
-                    reservadas.insert(col_idx);
-                } else if enc.contains("EVALUADOR") {
-                    evaluador_idx = Some(col_idx);
-                    reservadas.insert(col_idx);
-                } else if enc == "GRUPO" {
-                    grupo_idx = Some(col_idx);
-                    reservadas.insert(col_idx);
-                }
-            }
-        }
+        let idx = rows
+            .first()
+            .map(|h| detectar_indices_columnas(h))
+            .ok_or("El archivo está vacío")?;
 
         let total_cols = rows.first().map(|r| r.len()).unwrap_or(0);
-        let indices_criterios = detectar_columnas_criterio(&rows, &reservadas, total_cols);
+        let indices_criterios = detectar_columnas_criterio(&rows, &idx.reservadas, total_cols);
 
         let mut datos_por_grupo: HashMap<String, HashMap<String, (f64, usize, Vec<f64>)>> =
             HashMap::new();
@@ -197,17 +232,20 @@ pub mod comandos {
                 continue;
             }
 
-            let evaluado = evaluado_idx
+            let evaluado = idx
+                .evaluado
                 .and_then(|i| row.get(i))
                 .map(|d| d.to_string().trim().replace('/', " "))
                 .unwrap_or_default();
 
-            let evaluador = evaluador_idx
+            let evaluador = idx
+                .evaluador
                 .and_then(|i| row.get(i))
                 .map(|d| d.to_string().trim().replace('/', " "))
                 .unwrap_or_default();
 
-            let grupo = grupo_idx
+            let grupo = idx
+                .grupo
                 .and_then(|i| row.get(i))
                 .map(|d| limpiar_grupo_id(d))
                 .unwrap_or_default();
@@ -296,29 +334,13 @@ pub mod comandos {
     pub fn obtener_notas_par(ruta: String) -> Result<Vec<super::NotaEstudiante>, String> {
         let rows = abrir_como_rows(&ruta)?;
 
-        let mut evaluado_idx = None;
-        let mut evaluador_idx = None;
-        let mut grupo_idx = None;
-        let mut reservadas: HashSet<usize> = HashSet::new();
-
-        if let Some(header) = rows.first() {
-            for (col_idx, celda) in header.iter().enumerate() {
-                let enc = celda.to_string().trim().to_uppercase().replace('\n', " ");
-                if enc.contains("EVALUADO") && !enc.contains("EVALUADOR") {
-                    evaluado_idx = Some(col_idx);
-                    reservadas.insert(col_idx);
-                } else if enc.contains("EVALUADOR") {
-                    evaluador_idx = Some(col_idx);
-                    reservadas.insert(col_idx);
-                } else if enc == "GRUPO" {
-                    grupo_idx = Some(col_idx);
-                    reservadas.insert(col_idx);
-                }
-            }
-        }
+        let idx = rows
+            .first()
+            .map(|h| detectar_indices_columnas(h))
+            .ok_or("El archivo está vacío")?;
 
         let total_cols = rows.first().map(|r| r.len()).unwrap_or(0);
-        let indices_criterios = detectar_columnas_criterio(&rows, &reservadas, total_cols);
+        let indices_criterios = detectar_columnas_criterio(&rows, &idx.reservadas, total_cols);
         let escala_max = detectar_escala_max(&rows, &indices_criterios);
 
         let mut persona_a_grupo: HashMap<String, String> = HashMap::new();
@@ -327,15 +349,18 @@ pub mod comandos {
             if i == 0 {
                 continue;
             }
-            let evaluado = evaluado_idx
+            let evaluado = idx
+                .evaluado
                 .and_then(|i| row.get(i))
                 .map(|d| d.to_string().trim().replace('/', " "))
                 .unwrap_or_default();
-            let evaluador = evaluador_idx
+            let evaluador = idx
+                .evaluador
                 .and_then(|i| row.get(i))
                 .map(|d| d.to_string().trim().replace('/', " "))
                 .unwrap_or_default();
-            let grupo = grupo_idx
+            let grupo = idx
+                .grupo
                 .and_then(|i| row.get(i))
                 .map(|d| limpiar_grupo_id(d))
                 .unwrap_or_default();
@@ -359,15 +384,18 @@ pub mod comandos {
                 continue;
             }
 
-            let evaluado = evaluado_idx
+            let evaluado = idx
+                .evaluado
                 .and_then(|i| row.get(i))
                 .map(|d| d.to_string().trim().replace('/', " "))
                 .unwrap_or_default();
-            let evaluador = evaluador_idx
+            let evaluador = idx
+                .evaluador
                 .and_then(|i| row.get(i))
                 .map(|d| d.to_string().trim().replace('/', " "))
                 .unwrap_or_default();
-            let grupo_evaluado = grupo_idx
+            let grupo_evaluado = idx
+                .grupo
                 .and_then(|i| row.get(i))
                 .map(|d| limpiar_grupo_id(d))
                 .unwrap_or_default();
@@ -474,29 +502,13 @@ pub mod comandos {
     pub fn obtener_autoevaluaciones(ruta: String) -> Result<Vec<super::AutoEvaluacion>, String> {
         let rows = abrir_como_rows(&ruta)?;
 
-        let mut evaluado_idx = None;
-        let mut evaluador_idx = None;
-        let mut grupo_idx = None;
-        let mut reservadas: HashSet<usize> = HashSet::new();
-
-        if let Some(header) = rows.first() {
-            for (col_idx, celda) in header.iter().enumerate() {
-                let enc = celda.to_string().trim().to_uppercase().replace('\n', " ");
-                if enc.contains("EVALUADO") && !enc.contains("EVALUADOR") {
-                    evaluado_idx = Some(col_idx);
-                    reservadas.insert(col_idx);
-                } else if enc.contains("EVALUADOR") {
-                    evaluador_idx = Some(col_idx);
-                    reservadas.insert(col_idx);
-                } else if enc == "GRUPO" {
-                    grupo_idx = Some(col_idx);
-                    reservadas.insert(col_idx);
-                }
-            }
-        }
+        let idx = rows
+            .first()
+            .map(|h| detectar_indices_columnas(h))
+            .ok_or("El archivo está vacío")?;
 
         let total_cols = rows.first().map(|r| r.len()).unwrap_or(0);
-        let indices_criterios = detectar_columnas_criterio(&rows, &reservadas, total_cols);
+        let indices_criterios = detectar_columnas_criterio(&rows, &idx.reservadas, total_cols);
 
         let mut autoevaluaciones: HashMap<String, (f64, String)> = HashMap::new();
 
@@ -505,15 +517,18 @@ pub mod comandos {
                 continue;
             }
 
-            let evaluado = evaluado_idx
+            let evaluado = idx
+                .evaluado
                 .and_then(|i| row.get(i))
                 .map(|d| d.to_string().trim().replace('/', " "))
                 .unwrap_or_default();
-            let evaluador = evaluador_idx
+            let evaluador = idx
+                .evaluador
                 .and_then(|i| row.get(i))
                 .map(|d| d.to_string().trim().replace('/', " "))
                 .unwrap_or_default();
-            let grupo = grupo_idx
+            let grupo = idx
+                .grupo
                 .and_then(|i| row.get(i))
                 .map(|d| limpiar_grupo_id(d))
                 .unwrap_or_default();
