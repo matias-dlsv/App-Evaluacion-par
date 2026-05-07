@@ -1,6 +1,8 @@
 use calamine::{open_workbook_auto, Data, Reader};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::fs::File;
+use std::io::Read;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Estudiante {
@@ -90,26 +92,64 @@ fn detectar_escala_max(rows: &[Vec<Data>], criterios: &[usize]) -> f64 {
     max_val
 }
 
+/// Abre el archivo (xlsx, xls o csv) y devuelve todas las filas como Vec<Vec<Data>>.
+/// Para CSV normaliza el separador ';' → ',' antes de parsear, ya que calamine
+/// solo acepta coma como delimitador en archivos CSV.
+fn abrir_como_rows(ruta: &str) -> Result<Vec<Vec<Data>>, String> {
+    let extension = std::path::Path::new(ruta)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+
+    if extension == "csv" {
+        let mut contenido = String::new();
+        File::open(ruta)
+            .map_err(|e| format!("Error al abrir CSV: {:?}", e))?
+            .read_to_string(&mut contenido)
+            .map_err(|e| format!("Error al leer CSV: {:?}", e))?;
+
+        // Si la primera línea usa ';' y no comas, normalizar todo el archivo
+        let usa_punto_coma = contenido
+            .lines()
+            .next()
+            .map(|l| l.contains(';') && !l.contains(','))
+            .unwrap_or(false);
+
+        let contenido_normalizado = if usa_punto_coma {
+            contenido.replace(';', ",")
+        } else {
+            contenido
+        };
+
+        let cursor = std::io::Cursor::new(contenido_normalizado.into_bytes());
+        let mut workbook: calamine::Csv<_> = calamine::Csv::new(cursor);
+        let range = workbook
+            .worksheet_range("Sheet1")
+            .map_err(|e| format!("Error al leer CSV: {:?}", e))?;
+        Ok(range.rows().map(|r| r.to_vec()).collect())
+    } else {
+        let mut workbook =
+            open_workbook_auto(ruta).map_err(|e| format!("Error al abrir el archivo: {:?}", e))?;
+        let sheet_name = workbook
+            .sheet_names()
+            .first()
+            .cloned()
+            .ok_or("El archivo está vacío")?;
+        let range = workbook
+            .worksheet_range(&sheet_name)
+            .map_err(|e| format!("Error al leer la pestaña: {:?}", e))?;
+        Ok(range.rows().map(|r| r.to_vec()).collect())
+    }
+}
+
 pub mod comandos {
     use super::*;
     use tauri::command;
 
     #[command]
     pub fn procesar_respuestas(ruta: String) -> Result<Vec<Grupo>, String> {
-        let mut workbook =
-            open_workbook_auto(&ruta).map_err(|e| format!("Error al abrir el Excel: {:?}", e))?;
-
-        let sheet_name = workbook
-            .sheet_names()
-            .first()
-            .cloned()
-            .ok_or("El Excel está vacío")?;
-
-        let range = workbook
-            .worksheet_range(&sheet_name)
-            .map_err(|e| format!("Error al leer la pestaña: {:?}", e))?;
-
-        let rows: Vec<Vec<Data>> = range.rows().map(|r| r.to_vec()).collect();
+        let rows = abrir_como_rows(&ruta)?;
 
         let mut evaluado_idx: Option<usize> = None;
         let mut evaluador_idx: Option<usize> = None;
@@ -247,20 +287,7 @@ pub mod comandos {
 
     #[command]
     pub fn obtener_notas_par(ruta: String) -> Result<Vec<super::NotaEstudiante>, String> {
-        let mut workbook =
-            open_workbook_auto(&ruta).map_err(|e| format!("Error al abrir: {:?}", e))?;
-
-        let sheet_name = workbook
-            .sheet_names()
-            .first()
-            .cloned()
-            .ok_or("Excel vacío")?;
-
-        let range = workbook
-            .worksheet_range(&sheet_name)
-            .map_err(|e| format!("Error: {:?}", e))?;
-
-        let rows: Vec<Vec<Data>> = range.rows().map(|r| r.to_vec()).collect();
+        let rows = abrir_como_rows(&ruta)?;
 
         let mut evaluado_idx = None;
         let mut evaluador_idx = None;
@@ -438,20 +465,7 @@ pub mod comandos {
 
     #[command]
     pub fn obtener_autoevaluaciones(ruta: String) -> Result<Vec<super::AutoEvaluacion>, String> {
-        let mut workbook =
-            open_workbook_auto(&ruta).map_err(|e| format!("Error al abrir: {:?}", e))?;
-
-        let sheet_name = workbook
-            .sheet_names()
-            .first()
-            .cloned()
-            .ok_or("Excel vacío")?;
-
-        let range = workbook
-            .worksheet_range(&sheet_name)
-            .map_err(|e| format!("Error: {:?}", e))?;
-
-        let rows: Vec<Vec<Data>> = range.rows().map(|r| r.to_vec()).collect();
+        let rows = abrir_como_rows(&ruta)?;
 
         let mut evaluado_idx = None;
         let mut evaluador_idx = None;

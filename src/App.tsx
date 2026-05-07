@@ -492,7 +492,9 @@ function App() {
     if (!nombreCurso.trim()) return setEstadoCarga("Ingresa un nombre.");
     try {
       const file = await open({
-        filters: [{ name: "Excel", extensions: ["xls", "xlsx"] }],
+        filters: [
+          { name: "Evaluación Par", extensions: ["xls", "xlsx", "csv"] },
+        ],
       });
       if (!file) return;
       setEstadoCarga("Procesando archivo...");
