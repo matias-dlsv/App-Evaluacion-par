@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "DIO",
+  "productName": "EquiPar",
   "version": "0.1.0",
-  "identifier": "com.matia.dio",
+  "identifier": "cl.uandes.equipar",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "DIO - Evaluación Par",
+        "title": "EquiPar",
         "width": 1280,
         "height": 800
       }
@@ -30,6 +30,7 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "publisher": "Escuela de Kinesiología-Universidad de los Andes"
   }
 }

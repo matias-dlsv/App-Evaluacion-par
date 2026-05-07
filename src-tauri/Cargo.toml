@@ -1,13 +1,13 @@
 [package]
-name = "dio"
+name = "equipar"
 version = "0.1.0"
 description = "App para evaluaciones pares"
-authors = ["you"]
+authors = ["Universidad de los Andes"]
 edition = "2021"
-default-run = "dio"
+default-run = "equipar"
 
 [lib]
-name = "dio_lib"
+name = "equipar_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

@@ -1,1 +1,66 @@
 @import "tailwindcss";
+
+/* ─── DM Sans ─────────────────────────────────────────────────────────────── */
+
+@font-face {
+  font-family: 'DM Sans';
+  src: url('./assets/fonts/DMSans-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'DM Sans';
+  src: url('./assets/fonts/DMSans-Medium.ttf') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'DM Sans';
+  src: url('./assets/fonts/DMSans-SemiBold.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'DM Sans';
+  src: url('./assets/fonts/DMSans-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+}
+
+/* ─── Paleta Uandes ───────────────────────────────────────────────────────── */
+
+:root {
+  /* Rojos */
+  --color-primary:     #CE0019; /* Pantone 3546 C  — rojo principal */
+  --color-primary-dark:#8A001A; /* Pantone 7623 C  — rojo oscuro    */
+  --color-primary-mid: #A30D12; /* Pantone 7620 C  — rojo medio     */
+  --color-primary-warm:#CA3625; /* Pantone 7626 C  — rojo cálido    */
+
+  /* Azules oscuros */
+  --color-navy:        #131E29; /* Pantone 7547 C  — navy            */
+  --color-blue-dark:   #243746; /* Pantone 7546 C  — azul oscuro     */
+  --color-blue-mid:    #415364; /* Pantone 7545 C  — azul medio      */
+  --color-blue-light:  #758592; /* Pantone 7544 C  — azul claro      */
+
+  /* Neutros */
+  --color-warm-gray:   #D6D1CA; /* Pantone Warm Gray 1 C             */
+  --color-white:       #FFFFFF;
+
+  /* Hover / variantes calculadas */
+  --color-primary-hover: #a80014;
+}
+
+/* ─── Tipografía global ───────────────────────────────────────────────────── */
+
+@theme {
+  --font-sans: 'DM Sans', sans-serif;
+}
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
