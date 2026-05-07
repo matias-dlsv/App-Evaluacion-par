@@ -93,8 +93,8 @@ fn detectar_escala_max(rows: &[Vec<Data>], criterios: &[usize]) -> f64 {
 }
 
 /// Abre el archivo (xlsx, xls o csv) y devuelve todas las filas como Vec<Vec<Data>>.
-/// Para CSV normaliza el separador ';' → ',' antes de parsear, ya que calamine
-/// solo acepta coma como delimitador en archivos CSV.
+/// Para CSV normaliza el separador ';' → ',' escribiendo un archivo temporal,
+/// ya que open_workbook_auto detecta CSV por extensión y solo acepta coma.
 fn abrir_como_rows(ruta: &str) -> Result<Vec<Vec<Data>>, String> {
     let extension = std::path::Path::new(ruta)
         .extension()
@@ -122,10 +122,17 @@ fn abrir_como_rows(ruta: &str) -> Result<Vec<Vec<Data>>, String> {
             contenido
         };
 
-        let cursor = std::io::Cursor::new(contenido_normalizado.into_bytes());
-        let mut workbook: calamine::Csv<_> = calamine::Csv::new(cursor);
+        // Escribir a un archivo temporal con extensión .csv para que
+        // open_workbook_auto lo detecte correctamente
+        let ruta_tmp = std::env::temp_dir().join("equipar_tmp_import.csv");
+        std::fs::write(&ruta_tmp, contenido_normalizado.as_bytes())
+            .map_err(|e| format!("Error al escribir CSV temporal: {:?}", e))?;
+
+        let mut workbook =
+            open_workbook_auto(&ruta_tmp).map_err(|e| format!("Error al parsear CSV: {:?}", e))?;
+        let sheet_name = workbook.sheet_names().first().cloned().ok_or("CSV vacío")?;
         let range = workbook
-            .worksheet_range("Sheet1")
+            .worksheet_range(&sheet_name)
             .map_err(|e| format!("Error al leer CSV: {:?}", e))?;
         Ok(range.rows().map(|r| r.to_vec()).collect())
     } else {
