@@ -1,13 +1,7 @@
 # EquiPar
 **Plataforma de Evaluación Par — Universidad de los Andes**
 
-EquiPar es una aplicación de escritorio para gestionar y calcular notas de evaluación entre pares en cursos universitarios. Permite cargar respuestas desde Excel, calcular notas ajustadas con penalizaciones configurables, y exportar resultados por grupo o curso completo.
-
----
-
-## Contexto
-
-Este proyecto fue desarrollado en el marco del **CIIMTA — Concurso de Incentivos para la Innovación Metodológica – Tecnológica en las Asignaturas**, iniciativa de la Subdirección de Innovación y Tecnología del CID de la Universidad de los Andes. El concurso financia propuestas docentes que mejoran el aprendizaje estudiantil mediante cambios metodológicos con impacto en la comunidad universitaria.
+EquiPar es una aplicación de escritorio para gestionar y calcular notas de evaluación entre pares en cursos universitarios. Permite cargar respuestas desde Excel o CSV, calcular notas ajustadas con penalizaciones configurables, y exportar resultados por grupo o curso completo.
 
 ---
 
@@ -18,7 +12,8 @@ Descarga el instalador correspondiente a tu sistema operativo desde la sección 
 | Sistema | Archivo |
 |---------|---------|
 | 🪟 Windows | `EquiPar_x.x.x_x64-setup.exe` |
-| 🍎 Mac (Apple Silicon) | `EquiPar_x.x.x_aarch64.dmg` |
+| 🍎 Mac Apple Silicon (M1/M2/M3) | `EquiPar_x.x.x_aarch64.dmg` |
+| 🍎 Mac Intel (pre-2020) | `EquiPar_x.x.x_x64.dmg` |
 | 🐧 Linux | `EquiPar_x.x.x_amd64.AppImage` |
 
 ---
@@ -35,7 +30,7 @@ Descarga el instalador correspondiente a tu sistema operativo desde la sección 
 
 ---
 
-### 🍎 Mac (Apple Silicon)
+### 🍎 Mac Apple Silicon (M1/M2/M3)
 
 1. Descarga el archivo `EquiPar_x.x.x_aarch64.dmg` y ábrelo.
 2. Arrastra el ícono de **EquiPar** a la carpeta **Aplicaciones**.
@@ -48,6 +43,16 @@ Descarga el instalador correspondiente a tu sistema operativo desde la sección 
 
 ---
 
+### 🍎 Mac Intel (pre-2020)
+
+1. Descarga el archivo `EquiPar_x.x.x_x64.dmg` y ábrelo.
+2. Arrastra el ícono de **EquiPar** a la carpeta **Aplicaciones**.
+3. Los pasos para autorizar la app son idénticos a los de Apple Silicon (pasos 3–6 anteriores).
+
+> Si no sabes qué chip tiene tu Mac, ve a **Menú Apple → Acerca de este Mac**. Si dice "Chip: Apple M1" (o M2, M3) descarga el `.dmg aarch64`. Si dice "Procesador: Intel" descarga el `.dmg x64`.
+
+---
+
 ### 🐧 Linux
 
 1. Descarga el archivo `EquiPar_x.x.x_amd64.AppImage`.
@@ -55,18 +60,20 @@ Descarga el instalador correspondiente a tu sistema operativo desde la sección 
    - **Desde el explorador de archivos:** clic derecho → Propiedades → Permisos → activar _"Permitir ejecutar el archivo como programa"_.
    - **Desde la terminal:**
      ```bash
-     chmod +x EquiPar_x.x.x_amd64.AppImage
+     chmod +x EquiPar_*.AppImage
      ```
 3. Ejecuta el archivo haciendo doble clic o desde la terminal:
    ```bash
-   ./EquiPar_x.x.x_amd64.AppImage
+   ./EquiPar_*.AppImage
    ```
 
 > El AppImage no requiere instalación ni permisos de administrador. Funciona en Ubuntu, Fedora, Arch y la mayoría de distribuciones modernas.
+
 ---
+
 ## Funcionalidades
 
-- **Carga de datos desde Excel** — Procesa archivos `.xlsx` con respuestas de evaluación par, notas individuales y autoevaluaciones
+- **Carga de datos desde Excel o CSV** — Procesa archivos `.xlsx` y `.csv` con respuestas de evaluación par, notas individuales y autoevaluaciones. Los CSV con separador `;` (formato europeo/español) también son compatibles.
 - **Gestión de cursos y grupos** — Crea, edita y elimina cursos y grupos de trabajo manualmente o desde archivo
 - **Cálculo de notas ajustadas** — Aplica proporcionalidad entre pares con dos penalizaciones configurables:
   - Por evaluar a compañeros fuera del propio grupo
@@ -94,3 +101,9 @@ Descarga el instalador correspondiente a tu sistema operativo desde la sección 
 | Persistencia | `@tauri-apps/plugin-store` |
 | Exportación Excel | ExcelJS |
 | Backend (procesamiento) | Rust |
+
+---
+
+## Contexto
+
+Este proyecto fue desarrollado en el marco del **CIIMTA — Concurso de Incentivos para la Innovación Metodológica – Tecnológica en las Asignaturas**, iniciativa de la Subdirección de Innovación y Tecnología del CID de la Universidad de los Andes. El concurso financia propuestas docentes que mejoran el aprendizaje estudiantil mediante cambios metodológicos con impacto en la comunidad universitaria.
