@@ -2,8 +2,8 @@ name: Release
 on:
   push:
     tags:
-      - "v*" # Se ejecutará cada vez que subas un tag que empiece con 'v' (ej: v1.0.0)
-  workflow_dispatch: # Permite ejecutarlo manualmente desde GitHub
+      - "v*"
+  workflow_dispatch:
 
 jobs:
   release:
@@ -12,12 +12,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [macos-latest, ubuntu-22.04, windows-latest] # Aquí le decimos que compile en Windows, Mac y Ubuntu
+        platform: [macos-latest, ubuntu-22.04, windows-latest]
 
     runs-on: ${{ matrix.platform }}
     steps:
       - name: Checkout del código
         uses: actions/checkout@v4
+
       - name: Instalar dependencias de Linux (Solo para Ubuntu)
         if: runner.os == 'Linux'
         run: |
@@ -25,7 +26,6 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
 
       - name: Instalar dependencias de Node.js
-        # Cambia pnpm por npm o yarn dependiendo de lo que uses en tu proyecto
         run: npm install
 
       - name: Instalar Rust
@@ -41,20 +41,20 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: app-v__VERSION__ # Toma la versión de tu tauri.conf.json
-          releaseName: "App v__VERSION__"
+          tagName: app-v__VERSION__
+          releaseName: "EquiPar v__VERSION__"
           releaseBody: |
-  ## EquiPar v__VERSION__
+            ## EquiPar v__VERSION__
 
-  Descarga el instalador según tu sistema operativo:
+            Descarga el instalador según tu sistema operativo:
 
-  | Sistema | Archivo |
-  |---------|---------|
-  | 🪟 Windows | `EquiPar_x.x.x_x64-setup.exe` |
-  | 🍎 Mac (Apple Silicon) | `EquiPar_x.x.x_aarch64.dmg` |
-  | 🐧 Linux | `EquiPar_x.x.x_amd64.AppImage` |
+            | Sistema | Archivo |
+            |---------|---------|
+            | 🪟 Windows | `EquiPar___VERSION___x64-setup.exe` |
+            | 🍎 Mac (Apple Silicon) | `EquiPar___VERSION___aarch64.dmg` |
+            | 🐧 Linux | `EquiPar___VERSION___amd64.AppImage` |
 
-  > **Mac Intel** (más antiguo): usa el archivo `.dmg` con `x64` en el nombre si aparece.
-  > **Linux avanzado**: también disponibles `.deb` y `.rpm` más abajo.
+            > **Mac Intel** (más antiguo): usa el archivo `.dmg` con `x64` en el nombre si aparece.
+            > **Linux avanzado**: también disponibles `.deb` y `.rpm` más abajo.
           releaseDraft: true
           prerelease: false
