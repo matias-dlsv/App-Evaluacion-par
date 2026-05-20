@@ -102,6 +102,7 @@ Tienes dos opciones según tu preferencia:
   - Un archivo por grupo
   - Todos los grupos en una carpeta
   - Comparativa autoevaluación vs nota par, ordenada por mayor discrepancia
+  - Seguimiento de estudiantes a través de varias evaluaciones. 
 - **Persistencia local** — Los cursos se guardan automáticamente entre sesiones
 
 ---
