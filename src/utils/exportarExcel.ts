@@ -3,9 +3,9 @@ import ExcelJS from 'exceljs';
 import { save, open } from '@tauri-apps/plugin-dialog';
 import { writeFile, mkdir } from '@tauri-apps/plugin-fs';
 import { join } from '@tauri-apps/api/path';
-import { Curso } from './notas';
+import { Curso, Evaluacion, construirSeguimiento } from './notas';
 
-export async function exportarResultados(curso: Curso) {
+export async function exportarResultados(curso: Curso, evaluacion: Evaluacion) {
   try {
     const response = await fetch('/plantilla.xlsx');
     if (!response.ok) throw new Error("No se encontró la plantilla.xlsx.");
@@ -30,7 +30,7 @@ export async function exportarResultados(curso: Curso) {
       est: any;
     }[] = [];
 
-    curso.grupos.forEach(grupo => {
+    evaluacion.grupos.forEach(grupo => {
       const numeroGrupo = Number(grupo.numero) || 0;
       grupo.estudiantes.forEach(est => {
         mapaGrupos.set(est.identificacion.trim().toUpperCase(), numeroGrupo);
@@ -81,7 +81,7 @@ export async function exportarResultados(curso: Curso) {
       const nombresEvaluados: string[] = est.nombresEvaluados || [];
 
       const companerosTotales =
-        curso.grupos.find(g => Number(g.numero) === item.grupo)
+        evaluacion.grupos.find(g => Number(g.numero) === item.grupo)
           ?.estudiantes.length ?? 1;
       const companerosSinElMismo = Math.max(companerosTotales - 1, 0);
 
@@ -115,7 +115,7 @@ export async function exportarResultados(curso: Curso) {
     const bufferSalida = await workbook.xlsx.writeBuffer();
     const filePath = await save({
       filters: [{ name: 'Excel Workbook', extensions: ['xlsx'] }],
-      defaultPath: `${curso.nombre} - Resultados.xlsx`,
+      defaultPath: `${curso.nombre} - ${evaluacion.nombre} - Resultados.xlsx`,
     });
 
     if (filePath) {
@@ -130,8 +130,12 @@ export async function exportarResultados(curso: Curso) {
   }
 }
 
-export async function exportarXLSXGrupo(curso: Curso, grupoNumero: string) {
-  const grupo = curso.grupos.find(g => g.numero === grupoNumero);
+export async function exportarXLSXGrupo(
+  curso: Curso,
+  evaluacion: Evaluacion,
+  grupoNumero: string
+) {
+  const grupo = evaluacion.grupos.find(g => g.numero === grupoNumero);
   if (!grupo) throw new Error("Grupo no encontrado");
 
   const workbook = new ExcelJS.Workbook();
@@ -146,7 +150,6 @@ export async function exportarXLSXGrupo(curso: Curso, grupoNumero: string) {
     { header: 'Nota Final', key: 'notaFinal', width: 14 },
   ];
 
-  // Estilo del encabezado
   sheet.getRow(1).eachCell(cell => {
     cell.font = { bold: true, name: 'Arial' };
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9E1F2' } };
@@ -167,7 +170,7 @@ export async function exportarXLSXGrupo(curso: Curso, grupoNumero: string) {
   const bufferSalida = await workbook.xlsx.writeBuffer();
   const filePath = await save({
     filters: [{ name: 'Excel Workbook', extensions: ['xlsx'] }],
-    defaultPath: `${curso.nombre} - Grupo ${grupoNumero}.xlsx`,
+    defaultPath: `${curso.nombre} - ${evaluacion.nombre} - Grupo ${grupoNumero}.xlsx`,
   });
 
   if (filePath) {
@@ -177,7 +180,7 @@ export async function exportarXLSXGrupo(curso: Curso, grupoNumero: string) {
   return false;
 }
 
-export async function exportarTodosXLSXGrupos(curso: Curso) {
+export async function exportarTodosXLSXGrupos(curso: Curso, evaluacion: Evaluacion) {
   const folder = await open({
     directory: true,
     title: "Selecciona dónde guardar la carpeta de resultados",
@@ -185,12 +188,12 @@ export async function exportarTodosXLSXGrupos(curso: Curso) {
 
   if (!folder) return false;
 
-  const nombreCarpeta = `${curso.nombre.replace(/[\\/:*?"<>|]/g, '_')} - Grupos`;
+  const nombreCarpeta = `${curso.nombre.replace(/[\\/:*?"<>|]/g, '_')} - ${evaluacion.nombre} - Grupos`;
   const rutaCarpeta = await join(folder as string, nombreCarpeta);
 
   await mkdir(rutaCarpeta, { recursive: true });
 
-  for (const grupo of curso.grupos) {
+  for (const grupo of evaluacion.grupos) {
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet(`Grupo ${grupo.numero}`);
 
@@ -228,7 +231,7 @@ export async function exportarTodosXLSXGrupos(curso: Curso) {
   return true;
 }
 
-export async function exportarAutoevaluaciones(curso: Curso) {
+export async function exportarAutoevaluaciones(curso: Curso, evaluacion: Evaluacion) {
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet('Autoevaluaciones');
 
@@ -246,12 +249,10 @@ export async function exportarAutoevaluaciones(curso: Curso) {
     cell.alignment = { horizontal: 'center' };
   });
 
-  const todosLosEstudiantes = curso.grupos.flatMap(g =>
+  const todosLosEstudiantes = evaluacion.grupos.flatMap(g =>
     g.estudiantes.map(est => ({ est, grupo: g }))
   );
 
-  // Ordenar de mayor a menor diferencia (Auto - Par).
-  // Alumnos sin ambas notas quedan al final.
   todosLosEstudiantes.sort((a, b) => {
     const difA =
       a.est.notaAuto != null && a.est.notaPar != null
@@ -284,7 +285,157 @@ export async function exportarAutoevaluaciones(curso: Curso) {
   const bufferSalida = await workbook.xlsx.writeBuffer();
   const filePath = await save({
     filters: [{ name: 'Excel Workbook', extensions: ['xlsx'] }],
-    defaultPath: `${curso.nombre} - Autoevaluaciones.xlsx`,
+    defaultPath: `${curso.nombre} - ${evaluacion.nombre} - Autoevaluaciones.xlsx`,
+  });
+
+  if (filePath) {
+    await writeFile(filePath, new Uint8Array(bufferSalida));
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Exporta el seguimiento longitudinal.
+ *
+ * Estructura:
+ *   Fila 1: "NOMBRE Y APELLIDO" (rowspan 2) | por cada evaluación: nombre mergeado
+ *           en 4 columnas | "PROMEDIO EVALUACIONES" (rowspan 2, al final)
+ *   Fila 2: subencabezados por evaluación: "NOTA GRUPO", "NOTA EVALUACION PAR",
+ *            "FACTOR CASTIGO", "NOTA FINAL"
+ *   Filas 3+: datos, ordenados alfabéticamente.
+ */
+export async function exportarSeguimiento(curso: Curso) {
+  const seguimiento = construirSeguimiento(curso);
+  const numEvals = curso.evaluaciones.length;
+  // 1 col nombre + 4 cols × nEvals + 1 col promedio
+  const totalCols = 1 + numEvals * 4 + 1;
+
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('Seguimiento');
+
+  // ── Estilos reutilizables ───────────────────────────────────────────────────
+  const styleHeader = (cell: ExcelJS.Cell, opts?: { bold?: boolean; color?: string }) => {
+  cell.font = { bold: opts?.bold ?? true, name: 'Arial', size: 9, color: { argb: opts?.color ?? 'FF374151' } };
+  cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+  cell.border = {
+    bottom: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+    right: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+  };
+};
+
+  // ── Fila 1: cabeceras agrupadas por evaluación ──────────────────────────────
+  // Col A queda vacía en fila 1 (rowSpan 2 se aplica abajo via merge)
+  curso.evaluaciones.forEach((ev, idx) => {
+    const startCol = 2 + idx * 4;
+    const endCol = startCol + 3;
+    const cell = sheet.getRow(1).getCell(startCol);
+    cell.value = ev.nombre.toUpperCase();
+    styleHeader(cell);
+    sheet.mergeCells(1, startCol, 1, endCol);
+  });
+
+  // ── Fila 2: subencabezados ──────────────────────────────────────────────────
+  const fila2 = sheet.getRow(2);
+  const subHeaders = ['NOTA GRUPO', 'NOTA EV. PAR', 'FACTOR CASTIGO', 'NOTA FINAL'];
+  const subColors = ['FF6B7280', 'FF6B7280', 'FF6B7280', 'FFCE0019'];
+
+  curso.evaluaciones.forEach((_ev, idx) => {
+    const startCol = 2 + idx * 4;
+    subHeaders.forEach((h, hIdx) => {
+      const cell = fila2.getCell(startCol + hIdx);
+      cell.value = h;
+      styleHeader(cell, { color: subColors[hIdx] });
+    });
+  });
+
+  // ── Merge rowspan para "NOMBRE Y APELLIDO" (col A, filas 1-2) ──────────────
+  sheet.mergeCells(1, 1, 2, 1);
+  const cellNombre = sheet.getRow(1).getCell(1);
+  cellNombre.value = 'NOMBRE Y APELLIDO';
+  styleHeader(cellNombre);
+cellNombre.alignment = { horizontal: 'left', vertical: 'middle' };
+  cellNombre.alignment = { horizontal: 'left', vertical: 'middle' };
+
+  // ── Columna Promedio (última columna, merge filas 1-2) ─────────────────────
+  const promedioCol = totalCols;
+  sheet.mergeCells(1, promedioCol, 2, promedioCol);
+  const cellPromedio = sheet.getRow(1).getCell(promedioCol);
+  cellPromedio.value = 'PROMEDIO\nEVALUACIONES';
+  styleHeader(cellPromedio);
+  cellPromedio.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+
+  // Altura de las dos filas de cabecera
+  sheet.getRow(1).height = 28;
+  sheet.getRow(2).height = 28;
+
+  // ── Anchos de columna ───────────────────────────────────────────────────────
+  sheet.getColumn(1).width = 38; // Nombre
+  for (let i = 2; i <= totalCols - 1; i++) {
+    const posEnBloque = (i - 2) % 4;
+    // 0=nota grupo, 1=nota par, 2=factor castigo, 3=nota final
+    sheet.getColumn(i).width = posEnBloque === 1 ? 18 : 14;
+  }
+  sheet.getColumn(totalCols).width = 16; // Promedio
+
+  // ── Filas de datos ──────────────────────────────────────────────────────────
+  seguimiento.forEach((est, rowIdx) => {
+    const filaNum = 3 + rowIdx;
+    const fila = sheet.getRow(filaNum);
+
+    // Nombre
+    const cNombre = fila.getCell(1);
+    cNombre.value = est.identificacion;
+    cNombre.font = { name: 'Arial', size: 9 };
+    cNombre.alignment = { horizontal: 'left', vertical: 'middle' };
+    cNombre.border = { right: { style: 'thin', color: { argb: 'FFD1D5DB' } } };
+
+    // Datos por evaluación
+    curso.evaluaciones.forEach((ev, idx) => {
+      const startCol = 2 + idx * 4;
+      const datos = est.evaluaciones.find((e) => e.evalId === ev.id);
+
+      const vals = [
+        datos?.notaGrupo ?? null,
+        datos?.notaPar ?? null,
+        datos?.factorCastigoTotal ?? null,
+        datos?.notaFinal ?? null,
+      ];
+
+      vals.forEach((val, vIdx) => {
+  const cell = fila.getCell(startCol + vIdx);
+  cell.value = val;
+  cell.font = { name: 'Arial', size: 9, bold: vIdx === 3 };
+  cell.alignment = { horizontal: 'center', vertical: 'middle' };
+  if (vIdx === 3) {
+    cell.border = { right: { style: 'thin', color: { argb: 'FFD1D5DB' } } };
+  }
+});
+    });
+
+    // Calcular promedio de notas finales disponibles
+    const notasFinales = est.evaluaciones
+      .map((e) => e.notaFinal)
+      .filter((n): n is number => n !== undefined);
+    const promedio =
+      notasFinales.length > 0
+        ? Math.round((notasFinales.reduce((a, b) => a + b, 0) / notasFinales.length) * 10) / 10
+        : null;
+
+    const cProm = fila.getCell(promedioCol);
+    cProm.value = promedio;
+cProm.font = { name: 'Arial', size: 9, bold: true };
+cProm.alignment = { horizontal: 'center', vertical: 'middle' };
+cProm.border = { left: { style: 'thin', color: { argb: 'FFC3D3E8' } } };
+
+    fila.height = 16;
+  });
+
+  // ── Guardar ─────────────────────────────────────────────────────────────────
+  const bufferSalida = await workbook.xlsx.writeBuffer();
+  const filePath = await save({
+    filters: [{ name: 'Excel Workbook', extensions: ['xlsx'] }],
+    defaultPath: `${curso.nombre} - Seguimiento.xlsx`,
   });
 
   if (filePath) {

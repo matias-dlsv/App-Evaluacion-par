@@ -10,15 +10,19 @@ import {
   Curso,
   Grupo,
   Estudiante,
+  Evaluacion,
   ConfigDescuentos,
   DEFAULT_DESCUENTOS,
   calcularNotasAjustadas,
+  migrarCurso,
+  construirSeguimiento,
 } from "./utils/notas";
 import {
   exportarResultados,
   exportarXLSXGrupo,
   exportarTodosXLSXGrupos,
   exportarAutoevaluaciones,
+  exportarSeguimiento,
 } from "./utils/exportarExcel";
 
 interface NotaExtraida {
@@ -72,6 +76,48 @@ function nuevoGrupo(grupos: Grupo[]): Grupo {
   const nums = grupos.map((g) => parseInt(g.numero)).filter((n) => !isNaN(n));
   const siguiente = nums.length ? Math.max(...nums) + 1 : 1;
   return { numero: String(siguiente), estudiantes: [] };
+}
+
+async function procesarArchivoEvaluacion(ruta: string) {
+  const gruposExtraidos: Grupo[] = await invoke("procesar_respuestas", {
+    ruta,
+  });
+  const notasExtraidas: NotaExtraida[] = await invoke("obtener_notas_par", {
+    ruta,
+  });
+  const autoevaluaciones: AutoEvaluacion[] = await invoke(
+    "obtener_autoevaluaciones",
+    { ruta },
+  );
+
+  const mapaAuto = new Map(
+    autoevaluaciones.map((a) => [a.identificacion, a.nota_auto]),
+  );
+
+  const gruposConNotas = gruposExtraidos.map((grupo) => ({
+    ...grupo,
+    estudiantes: grupo.estudiantes.map((est) => {
+      const nota = notasExtraidas.find(
+        (n) => n.identificacion === est.identificacion,
+      );
+      const notaAuto = mapaAuto.get(est.identificacion);
+      return {
+        ...est,
+        notaPar:
+          nota?.nota_promedio !== null && nota?.nota_promedio !== undefined
+            ? nota.nota_promedio
+            : undefined,
+        evaluaciones: nota?.cantidad_evaluaciones,
+        notasIndividualesPar: nota?.notas_individuales,
+        nombresEvaluados: nota?.nombres_evaluados,
+        evaluacionesInvalidas: nota?.evaluaciones_invalidas,
+        notaAuto:
+          notaAuto !== null && notaAuto !== undefined ? notaAuto : undefined,
+      };
+    }),
+  }));
+
+  return gruposConNotas;
 }
 
 // ─── SVG delete button ────────────────────────────────────────────────────────
@@ -130,7 +176,6 @@ function EditGrupo({ grupo, onSave, onCancel }: EditGrupoProps) {
       const esDescuento =
         field === "factorCastigoFueraGrupo" ||
         field === "factorCastigoNoEvaluo";
-      // Para los campos de castigo el usuario ingresa 0-100, convertimos a 0-1
       const numFields = ["notaPar", "evaluaciones"];
       const numFieldsPct = ["factorCastigoFueraGrupo", "factorCastigoNoEvaluo"];
       let parsedVal: string | number | undefined;
@@ -305,62 +350,57 @@ function EditGrupo({ grupo, onSave, onCancel }: EditGrupoProps) {
                   )}
                 </td>
                 <td className="py-1.5 px-2">
-                  <div className="flex flex-col items-center gap-0.5">
-                    <div className="relative flex items-center">
-                      <input
-                        type="number"
-                        step="1"
-                        min="0"
-                        max="100"
-                        // Mostrar el valor interno (0-1) como porcentaje (0-100)
-                        value={
-                          est.factorCastigoNoEvaluo !== undefined
-                            ? Math.round(est.factorCastigoNoEvaluo * 100)
-                            : ""
-                        }
-                        onChange={(e) =>
-                          setEst(idx, "factorCastigoNoEvaluo", e.target.value)
-                        }
-                        placeholder="0"
-                        className="w-16 p-1 border rounded text-xs text-center outline-none bg-white block mx-auto pr-5"
-                        style={{ borderColor: "#CA3625" }}
-                      />
-                      <span
-                        className="absolute right-1.5 text-[10px] font-bold pointer-events-none"
-                        style={{ color: "#CA3625" }}
-                      >
-                        %
-                      </span>
-                    </div>
+                  <div className="relative flex items-center">
+                    <input
+                      type="number"
+                      step="1"
+                      min="0"
+                      max="100"
+                      value={
+                        est.factorCastigoNoEvaluo !== undefined
+                          ? Math.round(est.factorCastigoNoEvaluo * 100)
+                          : ""
+                      }
+                      onChange={(e) =>
+                        setEst(idx, "factorCastigoNoEvaluo", e.target.value)
+                      }
+                      placeholder="0"
+                      className="w-16 p-1 border rounded text-xs text-center outline-none bg-white block mx-auto pr-5"
+                      style={{ borderColor: "#CA3625" }}
+                    />
+                    <span
+                      className="absolute right-1.5 text-[10px] font-bold pointer-events-none"
+                      style={{ color: "#CA3625" }}
+                    >
+                      %
+                    </span>
                   </div>
                 </td>
                 <td className="py-1.5 px-2">
-                  <div className="flex flex-col items-center gap-0.5">
-                    <div className="relative flex items-center">
-                      <input
-                        type="number"
-                        step="1"
-                        min="0"
-                        max="100"
-                        value={
-                          est.factorCastigoFueraGrupo !== undefined
-                            ? Math.round(est.factorCastigoFueraGrupo * 100)
-                            : ""
-                        }
-                        onChange={(e) =>
-                          setEst(idx, "factorCastigoFueraGrupo", e.target.value)
-                        }
-                        placeholder="0"
-                        className="w-16 p-1 border rounded text-xs text-center outline-none bg-white block mx-auto pr-5"
-                        style={{ borderColor: "var(--color-primary-mid)" }}
-                      />
-                      <span
-                        className="absolute right-1.5 text-[10px] font-bold pointer-events-none"
-                        style={{ color: "var(--color-primary-mid)" }}
-                      >
-                        %
-                      </span>
-                    </div>
+                  <div className="relative flex items-center">
+                    <input
+                      type="number"
+                      step="1"
+                      min="0"
+                      max="100"
+                      value={
+                        est.factorCastigoFueraGrupo !== undefined
+                          ? Math.round(est.factorCastigoFueraGrupo * 100)
+                          : ""
+                      }
+                      onChange={(e) =>
+                        setEst(idx, "factorCastigoFueraGrupo", e.target.value)
+                      }
+                      placeholder="0"
+                      className="w-16 p-1 border rounded text-xs text-center outline-none bg-white block mx-auto pr-5"
+                      style={{ borderColor: "var(--color-primary-mid)" }}
+                    />
+                    <span
+                      className="absolute right-1.5 text-[10px] font-bold pointer-events-none"
+                      style={{ color: "var(--color-primary-mid)" }}
+                    >
+                      %
+                    </span>
                   </div>
                 </td>
                 <td className="py-1.5 px-2 text-center">
@@ -450,34 +490,53 @@ function App() {
   const [cursoActivo, setCursoActivo] = useState<Curso | null>(null);
   const [nombreCurso, setNombreCurso] = useState("");
   const [estadoCarga, setEstadoCarga] = useState("");
+
+  // evalActivaId: maps cursoId → evalId | 'seguimiento'
+  // Línea 495 — cambia a:
+  const [evalActivaId, setEvalActivaId] = useState<Record<string, string>>({});
+  // Rename tab state
+  const [_renombrando, _setRenombrando] = useState<{
+    cursoId: string;
+    evalId: string;
+  } | null>(null);
+  const [_nuevoNombreEval, _setNuevoNombreEval] = useState("");
+
+  // notasBrutas: cursoId → evalId → grupoNumero → stringValue
   const [notasBrutas, setNotasBrutas] = useState<
-    Record<string, Record<string, string>>
+    Record<string, Record<string, Record<string, string>>>
   >({});
+
   const [config, setConfig] = useState<ConfigDescuentos>(DEFAULT_DESCUENTOS);
-  // Estados de string para los inputs de castigo (evitan que el 0 se re-inserte al borrar)
   const [rawFueraGrupo, setRawFueraGrupo] = useState(
     String(Math.round(DEFAULT_DESCUENTOS.maxCastigoFueraGrupo * 100)),
   );
   const [rawNoEvaluo, setRawNoEvaluo] = useState(
     String(Math.round(DEFAULT_DESCUENTOS.maxCastigoNoEvaluo * 100)),
   );
+
+  // expandKey = `${cursoId}-${evalId}`
   const [gruposExpandidos, setGruposExpandidos] = useState<
     Record<string, Set<string>>
   >({});
   const [gruposEditando, setGruposEditando] = useState<
     Record<string, Set<string>>
   >({});
+
   const [busqueda, setBusqueda] = useState("");
   const [menuExportAbierto, setMenuExportAbierto] = useState(false);
   const storeRef = useRef<Awaited<ReturnType<typeof load>> | null>(null);
+
+  // ─── Store ─────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     (async () => {
       try {
         const store = await load("cursos.json", { defaults: { cursos: [] } });
         storeRef.current = store;
-        const guardados = await store.get<Curso[]>("cursos");
-        if (guardados && guardados.length > 0) setCursos(guardados);
+        const guardados = await store.get<any[]>("cursos");
+        if (guardados && guardados.length > 0) {
+          setCursos(guardados.map(migrarCurso));
+        }
       } catch (e) {
         console.error("Error cargando store:", e);
       }
@@ -487,6 +546,25 @@ function App() {
   const guardarEnStore = (lista: Curso[]) => {
     storeRef.current?.set("cursos", lista);
   };
+
+  // ─── Helpers de evaluación activa ──────────────────────────────────────────
+
+  const getEvalActiva = (cursoData: Curso): Evaluacion | null => {
+    if (!cursoData.evaluaciones.length) return null;
+    const id = evalActivaId[cursoData.id];
+    if (!id || id === "seguimiento") return cursoData.evaluaciones[0];
+    return (
+      cursoData.evaluaciones.find((e) => e.id === id) ??
+      cursoData.evaluaciones[0]
+    );
+  };
+
+  const esModoSeguimiento = (cursoData: Curso): boolean =>
+    evalActivaId[cursoData.id] === "seguimiento";
+
+  const expandKey = (cursoId: string, evalId: string) => `${cursoId}-${evalId}`;
+
+  // ─── Crear curso ───────────────────────────────────────────────────────────
 
   const crearCurso = async () => {
     if (!nombreCurso.trim()) return setEstadoCarga("Ingresa un nombre.");
@@ -499,51 +577,20 @@ function App() {
       if (!file) return;
       setEstadoCarga("Procesando archivo...");
 
-      const gruposExtraidos: Grupo[] = await invoke("procesar_respuestas", {
-        ruta: file,
-      });
-      const notasExtraidas: NotaExtraida[] = await invoke("obtener_notas_par", {
-        ruta: file,
-      });
-      const autoevaluaciones: AutoEvaluacion[] = await invoke(
-        "obtener_autoevaluaciones",
-        { ruta: file },
-      );
+      const gruposConNotas = await procesarArchivoEvaluacion(file as string);
 
-      const mapaAuto = new Map(
-        autoevaluaciones.map((a) => [a.identificacion, a.nota_auto]),
-      );
-
-      const gruposConNotas = gruposExtraidos.map((grupo) => ({
-        ...grupo,
-        estudiantes: grupo.estudiantes.map((est) => {
-          const nota = notasExtraidas.find(
-            (n) => n.identificacion === est.identificacion,
-          );
-          const notaAuto = mapaAuto.get(est.identificacion);
-          return {
-            ...est,
-            notaPar:
-              nota?.nota_promedio !== null && nota?.nota_promedio !== undefined
-                ? nota.nota_promedio
-                : undefined,
-            evaluaciones: nota?.cantidad_evaluaciones,
-            notasIndividualesPar: nota?.notas_individuales,
-            nombresEvaluados: nota?.nombres_evaluados,
-            evaluacionesInvalidas: nota?.evaluaciones_invalidas,
-            notaAuto:
-              notaAuto !== null && notaAuto !== undefined
-                ? notaAuto
-                : undefined,
-          };
-        }),
-      }));
+      const primeraEval: Evaluacion = {
+        id: crypto.randomUUID(),
+        nombre: "Evaluación 1",
+        grupos: gruposConNotas,
+      };
 
       const nuevoCurso: Curso = {
         id: crypto.randomUUID(),
         nombre: nombreCurso,
-        grupos: gruposConNotas,
+        evaluaciones: [primeraEval],
       };
+
       agregarCurso(nuevoCurso);
       guardarEnStore([...cursos, nuevoCurso]);
       setNombreCurso("");
@@ -552,6 +599,12 @@ function App() {
       setEstadoCarga(`Error: ${error}`);
     }
   };
+
+  // ─── Agregar evaluación a un curso existente ───────────────────────────────
+
+  // ─── Renombrar evaluación ──────────────────────────────────────────────────
+
+  // ─── Curso/grupo CRUD ──────────────────────────────────────────────────────
 
   const handleEliminarCurso = (e: React.MouseEvent, cursoId: string) => {
     e.stopPropagation();
@@ -563,26 +616,42 @@ function App() {
     if (cursoActivo?.id === cursoId) setCursoActivo(null);
   };
 
-  const crearGrupoVacio = (cursoId: string) => {
+  const crearGrupoVacio = (cursoId: string, evalId: string) => {
     const cursoData = cursos.find((c) => c.id === cursoId)!;
-    const grupo = nuevoGrupo(cursoData.grupos);
-    const actualizado = { ...cursoData, grupos: [...cursoData.grupos, grupo] };
+    const evalData = cursoData.evaluaciones.find((e) => e.id === evalId)!;
+    const grupo = nuevoGrupo(evalData.grupos);
+    const evalActualizada: Evaluacion = {
+      ...evalData,
+      grupos: [...evalData.grupos, grupo],
+    };
+    const actualizado: Curso = {
+      ...cursoData,
+      evaluaciones: cursoData.evaluaciones.map((e) =>
+        e.id === evalId ? evalActualizada : e,
+      ),
+    };
     actualizarCurso(actualizado);
     guardarEnStore(cursos.map((c) => (c.id === cursoId ? actualizado : c)));
     setCursoActivo(actualizado);
+
+    const key = expandKey(cursoId, evalId);
     setGruposEditando((prev) => {
-      const set = new Set(prev[cursoId] ?? []);
+      const set = new Set(prev[key] ?? []);
       set.add(grupo.numero);
-      return { ...prev, [cursoId]: set };
+      return { ...prev, [key]: set };
     });
     setGruposExpandidos((prev) => {
-      const set = new Set(prev[cursoId] ?? []);
+      const set = new Set(prev[key] ?? []);
       set.add(grupo.numero);
-      return { ...prev, [cursoId]: set };
+      return { ...prev, [key]: set };
     });
   };
 
-  const eliminarGrupo = (cursoId: string, grupoNumero: string) => {
+  const eliminarGrupo = (
+    cursoId: string,
+    evalId: string,
+    grupoNumero: string,
+  ) => {
     if (
       !confirm(
         `¿Eliminar el Grupo ${grupoNumero}? Esta acción no se puede deshacer.`,
@@ -590,9 +659,16 @@ function App() {
     )
       return;
     const cursoData = cursos.find((c) => c.id === cursoId)!;
-    const actualizado = {
+    const evalData = cursoData.evaluaciones.find((e) => e.id === evalId)!;
+    const evalActualizada: Evaluacion = {
+      ...evalData,
+      grupos: evalData.grupos.filter((g) => g.numero !== grupoNumero),
+    };
+    const actualizado: Curso = {
       ...cursoData,
-      grupos: cursoData.grupos.filter((g) => g.numero !== grupoNumero),
+      evaluaciones: cursoData.evaluaciones.map((e) =>
+        e.id === evalId ? evalActualizada : e,
+      ),
     };
     actualizarCurso(actualizado);
     guardarEnStore(cursos.map((c) => (c.id === cursoId ? actualizado : c)));
@@ -601,46 +677,70 @@ function App() {
 
   const guardarEdicionGrupo = (
     cursoId: string,
+    evalId: string,
     grupoEditado: Grupo,
     grupoNumeroOriginal: string,
   ) => {
     const cursoData = cursos.find((c) => c.id === cursoId)!;
-    const actualizado = {
-      ...cursoData,
-      grupos: cursoData.grupos.map((g) =>
+    const evalData = cursoData.evaluaciones.find((e) => e.id === evalId)!;
+    const evalActualizada: Evaluacion = {
+      ...evalData,
+      grupos: evalData.grupos.map((g) =>
         g.numero === grupoNumeroOriginal ? grupoEditado : g,
+      ),
+    };
+    const actualizado: Curso = {
+      ...cursoData,
+      evaluaciones: cursoData.evaluaciones.map((e) =>
+        e.id === evalId ? evalActualizada : e,
       ),
     };
     actualizarCurso(actualizado);
     guardarEnStore(cursos.map((c) => (c.id === cursoId ? actualizado : c)));
     setCursoActivo(actualizado);
-    cerrarEdicion(cursoId, grupoNumeroOriginal);
+    cerrarEdicion(cursoId, evalId, grupoNumeroOriginal);
   };
 
-  const abrirEdicion = (cursoId: string, grupoNumero: string) =>
+  const abrirEdicion = (
+    cursoId: string,
+    evalId: string,
+    grupoNumero: string,
+  ) => {
+    const key = expandKey(cursoId, evalId);
     setGruposEditando((prev) => {
-      const set = new Set(prev[cursoId] ?? []);
+      const set = new Set(prev[key] ?? []);
       set.add(grupoNumero);
-      return { ...prev, [cursoId]: set };
+      return { ...prev, [key]: set };
     });
+  };
 
-  const cerrarEdicion = (cursoId: string, grupoNumero: string) =>
+  const cerrarEdicion = (
+    cursoId: string,
+    evalId: string,
+    grupoNumero: string,
+  ) => {
+    const key = expandKey(cursoId, evalId);
     setGruposEditando((prev) => {
-      const set = new Set(prev[cursoId] ?? []);
+      const set = new Set(prev[key] ?? []);
       set.delete(grupoNumero);
-      return { ...prev, [cursoId]: set };
+      return { ...prev, [key]: set };
     });
+  };
 
-  const estaEditando = (cursoId: string, grupoNumero: string) =>
-    gruposEditando[cursoId]?.has(grupoNumero) ?? false;
+  const estaEditando = (cursoId: string, evalId: string, grupoNumero: string) =>
+    gruposEditando[expandKey(cursoId, evalId)]?.has(grupoNumero) ?? false;
 
   const aplicarNotasBrutas = () => {
     if (!cursoActivo) return;
     const cursoData =
       cursos.find((c) => c.id === cursoActivo.id) || cursoActivo;
-    const notasCurso = notasBrutas[cursoData.id] ?? {};
-    const gruposActualizados = cursoData.grupos.map((grupo) => {
-      const valor = notasCurso[grupo.numero];
+    const evalActiva = getEvalActiva(cursoData);
+    if (!evalActiva) return;
+
+    const notasEval = notasBrutas[cursoData.id]?.[evalActiva.id] ?? {};
+
+    const gruposActualizados = evalActiva.grupos.map((grupo) => {
+      const valor = notasEval[grupo.numero];
       const nota =
         valor !== undefined ? parseFloat(valor) : grupo.promedio_bruto;
       return {
@@ -648,8 +748,20 @@ function App() {
         promedio_bruto: isNaN(nota as number) ? grupo.promedio_bruto : nota,
       };
     });
-    const cursoConBrutas: Curso = { ...cursoData, grupos: gruposActualizados };
-    const cursoFinal = calcularNotasAjustadas(cursoConBrutas, config);
+
+    const evalConBrutas: Evaluacion = {
+      ...evalActiva,
+      grupos: gruposActualizados,
+    };
+    const evalFinal = calcularNotasAjustadas(evalConBrutas, config);
+
+    const cursoFinal: Curso = {
+      ...cursoData,
+      evaluaciones: cursoData.evaluaciones.map((e) =>
+        e.id === evalActiva.id ? evalFinal : e,
+      ),
+    };
+
     actualizarCurso(cursoFinal);
     guardarEnStore(
       cursos.map((c) => (c.id === cursoFinal.id ? cursoFinal : c)),
@@ -657,70 +769,103 @@ function App() {
     setCursoActivo(cursoFinal);
   };
 
-  const toggleGrupo = (cursoId: string, grupoNumero: string) =>
+  // ─── Expand/collapse ───────────────────────────────────────────────────────
+
+  const toggleGrupo = (key: string, grupoNumero: string) =>
     setGruposExpandidos((prev) => {
-      const set = new Set(prev[cursoId] ?? []);
+      const set = new Set(prev[key] ?? []);
       if (set.has(grupoNumero)) set.delete(grupoNumero);
       else set.add(grupoNumero);
-      return { ...prev, [cursoId]: set };
+      return { ...prev, [key]: set };
     });
 
-  const toggleTodos = (cursoId: string, grupos: Grupo[], expandir: boolean) =>
+  const toggleTodos = (key: string, grupos: Grupo[], expandir: boolean) =>
     setGruposExpandidos((prev) => ({
       ...prev,
-      [cursoId]: expandir
+      [key]: expandir
         ? new Set(grupos.map((g) => g.numero))
         : new Set<string>(),
     }));
 
-  const estaExpandido = (cursoId: string, grupoNumero: string) =>
-    gruposExpandidos[cursoId]?.has(grupoNumero) ?? false;
+  const estaExpandido = (key: string, grupoNumero: string) =>
+    gruposExpandidos[key]?.has(grupoNumero) ?? false;
 
-  const todosExpandidos = (cursoId: string, grupos: Grupo[]) =>
-    grupos.every((g) => gruposExpandidos[cursoId]?.has(g.numero));
-
-  const estudiantesDuplicados = (() => {
-    if (!cursoActivo) return new Set<string>();
-    const cursoData =
-      cursos.find((c) => c.id === cursoActivo.id) || cursoActivo;
-    const conteo: Record<string, number> = {};
-    cursoData.grupos.forEach((g) =>
-      g.estudiantes.forEach((e) => {
-        conteo[e.identificacion] = (conteo[e.identificacion] || 0) + 1;
-      }),
-    );
-    return new Set(
-      Object.entries(conteo)
-        .filter(([, v]) => v > 1)
-        .map(([k]) => k),
-    );
-  })();
+  const todosExpandidos = (key: string, grupos: Grupo[]) =>
+    grupos.every((g) => gruposExpandidos[key]?.has(g.numero));
 
   // ─── Vista de curso activo ───────────────────────────────────────────────────
 
   if (cursoActivo) {
     const cursoData =
       cursos.find((c) => c.id === cursoActivo.id) || cursoActivo;
-    const notasCurso = notasBrutas[cursoData.id] ?? {};
-    const setNotaCurso = (grupoNumero: string, valor: string) =>
+    const evalActiva = getEvalActiva(cursoData);
+
+    const modoSeguimiento = esModoSeguimiento(cursoData);
+    const key = evalActiva ? expandKey(cursoData.id, evalActiva.id) : "";
+
+    const notasEval = evalActiva
+      ? (notasBrutas[cursoData.id]?.[evalActiva.id] ?? {})
+      : {};
+
+    const setNotaCurso = (grupoNumero: string, valor: string) => {
+      if (!evalActiva) return;
       setNotasBrutas((prev) => ({
         ...prev,
-        [cursoData.id]: { ...(prev[cursoData.id] ?? {}), [grupoNumero]: valor },
+        [cursoData.id]: {
+          ...(prev[cursoData.id] ?? {}),
+          [evalActiva.id]: {
+            ...(prev[cursoData.id]?.[evalActiva.id] ?? {}),
+            [grupoNumero]: valor,
+          },
+        },
       }));
-    const allExpanded = todosExpandidos(cursoData.id, cursoData.grupos);
+    };
 
-    const gruposFiltrados =
-      busqueda.trim() === ""
-        ? cursoData.grupos
-        : cursoData.grupos.filter((grupo) =>
+    const allExpanded = evalActiva
+      ? todosExpandidos(key, evalActiva.grupos)
+      : false;
+
+    const tieneAutoevaluaciones = evalActiva
+      ? evalActiva.grupos.some((g) =>
+          g.estudiantes.some((e) => e.notaAuto !== undefined),
+        )
+      : false;
+
+    const estudiantesDuplicados = (() => {
+      if (!evalActiva) return new Set<string>();
+      const conteo: Record<string, number> = {};
+      evalActiva.grupos.forEach((g) =>
+        g.estudiantes.forEach((e) => {
+          conteo[e.identificacion] = (conteo[e.identificacion] || 0) + 1;
+        }),
+      );
+      return new Set(
+        Object.entries(conteo)
+          .filter(([, v]) => v > 1)
+          .map(([k]) => k),
+      );
+    })();
+
+    const gruposFiltrados = evalActiva
+      ? busqueda.trim() === ""
+        ? evalActiva.grupos
+        : evalActiva.grupos.filter((grupo) =>
             grupo.estudiantes.some((est) =>
               est.identificacion.toLowerCase().includes(busqueda.toLowerCase()),
             ),
-          );
+          )
+      : [];
 
-    const tieneAutoevaluaciones = cursoData.grupos.some((g) =>
-      g.estudiantes.some((e) => e.notaAuto !== undefined),
-    );
+    // Seguimiento
+    const seguimientoCompleto = modoSeguimiento
+      ? construirSeguimiento(cursoData)
+      : [];
+    const seguimientoFiltrado =
+      modoSeguimiento && busqueda.trim()
+        ? seguimientoCompleto.filter((est) =>
+            est.identificacion.toLowerCase().includes(busqueda.toLowerCase()),
+          )
+        : seguimientoCompleto;
 
     return (
       <div className="min-h-screen p-8" style={{ backgroundColor: "#F7F5F3" }}>
@@ -758,16 +903,16 @@ function App() {
           {/* Header del curso */}
           <div
             className="flex justify-between items-center p-6 rounded-xl shadow mb-6"
-            style={{
-              backgroundColor: "var(--color-primary)",
-            }}
+            style={{ backgroundColor: "var(--color-primary)" }}
           >
             <div>
               <h1 className="text-3xl font-bold text-white">
                 {cursoData.nombre}
               </h1>
               <p className="mt-1" style={{ color: "#FFAAAA" }}>
-                {cursoData.grupos.length} grupos
+                {evalActiva ? `${evalActiva.grupos.length} grupos` : "0 grupos"}{" "}
+                · {cursoData.evaluaciones.length} evaluación
+                {cursoData.evaluaciones.length !== 1 ? "es" : ""}
               </p>
             </div>
 
@@ -793,7 +938,7 @@ function App() {
                 </svg>
               </button>
 
-              {menuExportAbierto && (
+              {menuExportAbierto && evalActiva && (
                 <>
                   <div
                     className="fixed inset-0 z-10"
@@ -808,7 +953,7 @@ function App() {
                       onClick={async () => {
                         setMenuExportAbierto(false);
                         try {
-                          await exportarResultados(cursoData);
+                          await exportarResultados(cursoData, evalActiva);
                           alert("¡Excel exportado con éxito!");
                         } catch (e) {
                           alert("Error al exportar: " + String(e));
@@ -832,7 +977,7 @@ function App() {
                           className="text-[11px]"
                           style={{ color: "var(--color-blue-light)" }}
                         >
-                          Todos los grupos
+                          {evalActiva.nombre} — todos los grupos
                         </p>
                       </div>
                     </button>
@@ -847,10 +992,13 @@ function App() {
                       onClick={async () => {
                         setMenuExportAbierto(false);
                         try {
-                          const ok = await exportarTodosXLSXGrupos(cursoData);
+                          const ok = await exportarTodosXLSXGrupos(
+                            cursoData,
+                            evalActiva,
+                          );
                           if (ok)
                             alert(
-                              "¡Excel de todos los grupos exportados con éxito!",
+                              "¡Excel de todos los grupos exportado con éxito!",
                             );
                         } catch (e) {
                           alert("Error al exportar: " + String(e));
@@ -874,10 +1022,57 @@ function App() {
                           className="text-[11px]"
                           style={{ color: "var(--color-blue-light)" }}
                         >
-                          Un archivo por grupo en una carpeta
+                          Un archivo por grupo en carpeta
                         </p>
                       </div>
                     </button>
+
+                    {/* Excel seguimiento — solo si ≥2 evaluaciones */}
+                    {cursoData.evaluaciones.length >= 2 && (
+                      <>
+                        <div
+                          className="border-t"
+                          style={{ borderColor: "var(--color-warm-gray)" }}
+                        />
+                        <button
+                          onClick={async () => {
+                            setMenuExportAbierto(false);
+                            try {
+                              const ok = await exportarSeguimiento(cursoData);
+                              if (ok)
+                                alert("¡Seguimiento exportado con éxito!");
+                            } catch (e) {
+                              alert("Error al exportar: " + String(e));
+                            }
+                          }}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-sm hover:bg-gray-50 transition text-left"
+                          style={{ color: "var(--color-navy)" }}
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 16 16"
+                            fill="currentColor"
+                            className="w-4 h-4 shrink-0"
+                            style={{ color: "var(--color-blue-dark)" }}
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M15 8A7 7 0 1 1 1 8a7 7 0 0 1 14 0ZM9.5 5.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm-.5 3a3.5 3.5 0 0 0-2.986 1.691A5.476 5.476 0 0 0 8 13.5a5.476 5.476 0 0 0 1.986-.309A3.5 3.5 0 0 0 9 8.5Z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                          <div>
+                            <p className="font-semibold">Excel seguimiento</p>
+                            <p
+                              className="text-[11px]"
+                              style={{ color: "var(--color-blue-light)" }}
+                            >
+                              Tendencia longitudinal por alumno
+                            </p>
+                          </div>
+                        </button>
+                      </>
+                    )}
 
                     {/* Autoevaluaciones */}
                     {tieneAutoevaluaciones && (
@@ -890,8 +1085,10 @@ function App() {
                           onClick={async () => {
                             setMenuExportAbierto(false);
                             try {
-                              const ok =
-                                await exportarAutoevaluaciones(cursoData);
+                              const ok = await exportarAutoevaluaciones(
+                                cursoData,
+                                evalActiva,
+                              );
                               if (ok)
                                 alert(
                                   "¡Autoevaluaciones exportadas con éxito!",
@@ -945,15 +1142,18 @@ function App() {
                         Excel por grupo
                       </p>
                     </div>
-
                     <div className="max-h-60 overflow-y-auto">
-                      {cursoData.grupos.map((grupo) => (
+                      {evalActiva.grupos.map((grupo) => (
                         <button
                           key={grupo.numero}
                           onClick={async () => {
                             setMenuExportAbierto(false);
                             try {
-                              await exportarXLSXGrupo(cursoData, grupo.numero);
+                              await exportarXLSXGrupo(
+                                cursoData,
+                                evalActiva,
+                                grupo.numero,
+                              );
                             } catch (e) {
                               alert("Error al exportar: " + String(e));
                             }
@@ -983,9 +1183,133 @@ function App() {
               )}
             </div>
           </div>
+          {/* ─── Tabs de evaluaciones ─────────────────────────────────────── */}
+          <div className="flex items-center gap-2 mb-6 flex-wrap">
+            {cursoData.evaluaciones.map((ev) => (
+              <button
+                key={ev.id}
+                onClick={() =>
+                  setEvalActivaId((prev) => ({
+                    ...prev,
+                    [cursoData.id]: ev.id,
+                  }))
+                }
+                className="px-4 py-2 rounded-lg text-sm font-semibold transition border cursor-pointer"
+                style={
+                  evalActivaId[cursoData.id] === ev.id && !modoSeguimiento
+                    ? {
+                        backgroundColor: "var(--color-primary)",
+                        color: "white",
+                        borderColor: "var(--color-primary)",
+                      }
+                    : {
+                        backgroundColor: "white",
+                        color: "var(--color-blue-mid)",
+                        borderColor: "var(--color-warm-gray)",
+                      }
+                }
+              >
+                {ev.nombre}
+              </button>
+            ))}
 
-          {/* Advertencia duplicados */}
-          {estudiantesDuplicados.size > 0 && (
+            {/* + Agregar evaluación */}
+            <button
+              onClick={async () => {
+                try {
+                  const file = await open({
+                    filters: [
+                      {
+                        name: "Evaluación Par",
+                        extensions: ["xls", "xlsx", "csv"],
+                      },
+                    ],
+                  });
+                  if (!file) return;
+                  const gruposConNotas = await procesarArchivoEvaluacion(
+                    file as string,
+                  );
+                  const numEval = cursoData.evaluaciones.length + 1;
+                  const nuevaEval: Evaluacion = {
+                    id: crypto.randomUUID(),
+                    nombre: `Evaluación ${numEval}`,
+                    grupos: gruposConNotas,
+                  };
+                  const actualizado: Curso = {
+                    ...cursoData,
+                    evaluaciones: [...cursoData.evaluaciones, nuevaEval],
+                  };
+                  actualizarCurso(actualizado);
+                  guardarEnStore(
+                    cursos.map((c) =>
+                      c.id === cursoData.id ? actualizado : c,
+                    ),
+                  );
+                  setCursoActivo(actualizado);
+                  setEvalActivaId((prev) => ({
+                    ...prev,
+                    [cursoData.id]: nuevaEval.id,
+                  }));
+                } catch (error) {
+                  alert(`Error al agregar evaluación: ${error}`);
+                }
+              }}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold border-2 border-dashed transition cursor-pointer"
+              style={{
+                color: "var(--color-primary)",
+                borderColor: "var(--color-primary)",
+                backgroundColor: "#FFF5F5",
+              }}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 16 16"
+                fill="currentColor"
+                className="w-3.5 h-3.5"
+              >
+                <path d="M8.75 3.75a.75.75 0 0 0-1.5 0v3.5h-3.5a.75.75 0 0 0 0 1.5h3.5v3.5a.75.75 0 0 0 1.5 0v-3.5h3.5a.75.75 0 0 0 0-1.5h-3.5v-3.5Z" />
+              </svg>
+              Agregar evaluación
+            </button>
+
+            {/* Tab Seguimiento — solo si ≥2 evaluaciones */}
+            {cursoData.evaluaciones.length >= 2 && (
+              <button
+                onClick={() =>
+                  setEvalActivaId((prev) => ({
+                    ...prev,
+                    [cursoData.id]: "seguimiento",
+                  }))
+                }
+                className="ml-2 px-4 py-2 rounded-lg text-sm font-semibold transition border cursor-pointer flex items-center gap-1.5"
+                style={
+                  modoSeguimiento
+                    ? {
+                        backgroundColor: "var(--color-blue-mid)",
+                        color: "white",
+                        borderColor: "var(--color-blue-mid)",
+                      }
+                    : {
+                        backgroundColor: "white",
+                        color: "var(--color-blue-mid)",
+                        borderColor: "var(--color-blue-light)",
+                      }
+                }
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 16 16"
+                  fill="currentColor"
+                  className="w-4 h-4"
+                >
+                  <path d="M1.5 2A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h13a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 14.5 2h-13ZM11 8a1 1 0 1 1 2 0 1 1 0 0 1-2 0Zm1 3a1 1 0 1 1 0 2 1 1 0 0 1 0-2ZM3 9a1 1 0 1 1 2 0 1 1 0 0 1-2 0Zm1 3a1 1 0 1 1 0 2 1 1 0 0 1 0-2Zm3-3a1 1 0 1 1 2 0 1 1 0 0 1-2 0Zm1 3a1 1 0 1 1 0 2 1 1 0 0 1 0-2Z" />
+                </svg>
+                Seguimiento
+              </button>
+            )}
+          </div>
+          {/* Advertencia duplicados (solo en modo normal) */}
+          {!modoSeguimiento && estudiantesDuplicados.size > 0 && (
             <div
               className="border rounded-xl p-4 mb-6 flex gap-3 items-start"
               style={{ backgroundColor: "#FFFBEB", borderColor: "#FCD34D" }}
@@ -1007,617 +1331,863 @@ function App() {
             </div>
           )}
 
-          {/* Configuración de castigos */}
-          <div
-            className="bg-white p-6 rounded-xl shadow-sm border mb-6"
-            style={{ borderColor: "var(--color-warm-gray)" }}
-          >
-            <h2
-              className="text-lg font-bold mb-1"
-              style={{ color: "var(--color-primary)" }}
-            >
-              Configuración de castigos
-            </h2>
-            <p
-              className="text-xs mb-4"
-              style={{ color: "var(--color-blue-light)" }}
-            >
-              Fracción máxima de reducción sobre la proporción del estudiante (0
-              a 100%).
-            </p>
-            <div className="flex gap-8 flex-wrap">
-              <div className="flex flex-col gap-1">
-                <label
-                  className="text-xs font-semibold uppercase"
-                  style={{ color: "var(--color-primary-mid)" }}
-                >
-                  Máx. castigo por evaluar fuera del grupo
-                </label>
-                <div className="relative flex items-center">
-                  <input
-                    type="number"
-                    step="1"
-                    min="0"
-                    max="100"
-                    value={rawFueraGrupo}
-                    onChange={(e) => setRawFueraGrupo(e.target.value)}
-                    onBlur={() => {
-                      const n = Math.min(
-                        100,
-                        Math.max(0, parseFloat(rawFueraGrupo) || 0),
-                      );
-                      setRawFueraGrupo(String(n));
-                      setConfig((prev) => ({
-                        ...prev,
-                        maxCastigoFueraGrupo: n / 100,
-                      }));
-                    }}
-                    className="p-2 border rounded text-sm w-28 outline-none pr-7"
-                    style={{ borderColor: "var(--color-warm-gray)" }}
-                  />
-                  <span
-                    className="absolute right-2 text-xs font-bold pointer-events-none"
-                    style={{ color: "var(--color-primary-mid)" }}
-                  >
-                    %
-                  </span>
-                </div>
-                <span
-                  className="text-[10px]"
+          {/* ─── Modo Seguimiento ────────────────────────────────────────── */}
+          {modoSeguimiento ? (
+            <div className="flex flex-col gap-4">
+              {/* Searchbar */}
+              <div className="relative">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 16 16"
+                  fill="currentColor"
+                  className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
                   style={{ color: "var(--color-blue-light)" }}
                 >
-                  × cada evaluación inválida
-                </span>
-              </div>
-              <div className="flex flex-col gap-1">
-                <label
-                  className="text-xs font-semibold uppercase"
-                  style={{ color: "var(--color-primary-warm)" }}
-                >
-                  Máx. castigo por no evaluar compañeros
-                </label>
-                <div className="relative flex items-center">
-                  <input
-                    type="number"
-                    step="1"
-                    min="0"
-                    max="100"
-                    value={rawNoEvaluo}
-                    onChange={(e) => setRawNoEvaluo(e.target.value)}
-                    onBlur={() => {
-                      const n = Math.min(
-                        100,
-                        Math.max(0, parseFloat(rawNoEvaluo) || 0),
-                      );
-                      setRawNoEvaluo(String(n));
-                      setConfig((prev) => ({
-                        ...prev,
-                        maxCastigoNoEvaluo: n / 100,
-                      }));
-                    }}
-                    className="p-2 border rounded text-sm w-28 outline-none pr-7"
-                    style={{ borderColor: "var(--color-warm-gray)" }}
+                  <path
+                    fillRule="evenodd"
+                    d="M9.965 11.026a5 5 0 1 1 1.06-1.06l2.755 2.754a.75.75 0 1 1-1.06 1.06l-2.755-2.754ZM10.5 7a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0Z"
+                    clipRule="evenodd"
                   />
-                  <span
-                    className="absolute right-2 text-xs font-bold pointer-events-none"
-                    style={{ color: "var(--color-primary-warm)" }}
-                  >
-                    %
-                  </span>
-                </div>
-                <span
-                  className="text-[10px]"
-                  style={{ color: "var(--color-blue-light)" }}
-                >
-                  × (no evaluados / compañeros totales)
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Barra de controles + searchbar */}
-          <div className="flex flex-col gap-3 mb-4">
-            <div className="flex justify-between items-center">
-              <div className="flex gap-2">
-                <button
-                  onClick={() =>
-                    toggleTodos(cursoData.id, cursoData.grupos, !allExpanded)
-                  }
-                  className="flex items-center gap-2 px-4 py-2 bg-white border font-medium rounded-lg transition text-sm shadow-sm cursor-pointer"
+                </svg>
+                <input
+                  type="text"
+                  value={busqueda}
+                  onChange={(e) => setBusqueda(e.target.value)}
+                  placeholder="Buscar por estudiante..."
+                  className="w-full pl-9 pr-10 py-2 bg-white border rounded-lg text-sm outline-none shadow-sm"
                   style={{
-                    color: "var(--color-blue-mid)",
                     borderColor: "var(--color-warm-gray)",
+                    color: "var(--color-navy)",
                   }}
-                >
-                  {allExpanded ? (
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 16 16"
-                      fill="currentColor"
-                      className="w-4 h-4"
-                    >
-                      <path d="M3.75 7.25a.75.75 0 0 0 0 1.5h8.5a.75.75 0 0 0 0-1.5h-8.5Z" />
-                    </svg>
-                  ) : (
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 16 16"
-                      fill="currentColor"
-                      className="w-4 h-4"
-                    >
-                      <path d="M8.75 3.75a.75.75 0 0 0-1.5 0v3.5h-3.5a.75.75 0 0 0 0 1.5h3.5v3.5a.75.75 0 0 0 1.5 0v-3.5h3.5a.75.75 0 0 0 0-1.5h-3.5v-3.5Z" />
-                    </svg>
-                  )}
-                  {allExpanded ? "Colapsar todos" : "Expandir todos"}
-                </button>
-                <button
-                  onClick={() => crearGrupoVacio(cursoData.id)}
-                  className="flex items-center gap-2 px-4 py-2 bg-white border font-medium rounded-lg transition text-sm shadow-sm cursor-pointer"
-                  style={{
-                    color: "var(--color-primary)",
-                    borderColor: "var(--color-primary)",
-                  }}
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 16 16"
-                    fill="currentColor"
-                    className="w-4 h-4"
-                  >
-                    <path d="M8.75 3.75a.75.75 0 0 0-1.5 0v3.5h-3.5a.75.75 0 0 0 0 1.5h3.5v3.5a.75.75 0 0 0 1.5 0v-3.5h3.5a.75.75 0 0 0 0-1.5h-3.5v-3.5Z" />
-                  </svg>
-                  Nuevo grupo
-                </button>
-              </div>
-              <button
-                onClick={aplicarNotasBrutas}
-                className="px-5 py-2 text-white font-semibold rounded-lg transition cursor-pointer text-sm shadow"
-                style={{ backgroundColor: "var(--color-primary)" }}
-                onMouseOver={(e) =>
-                  (e.currentTarget.style.backgroundColor =
-                    "var(--color-primary-hover)")
-                }
-                onMouseOut={(e) =>
-                  (e.currentTarget.style.backgroundColor =
-                    "var(--color-primary)")
-                }
-              >
-                Calcular notas finales
-              </button>
-            </div>
-
-            {/* Searchbar */}
-            <div className="relative">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 16 16"
-                fill="currentColor"
-                className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
-                style={{ color: "var(--color-blue-light)" }}
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M9.965 11.026a5 5 0 1 1 1.06-1.06l2.755 2.754a.75.75 0 1 1-1.06 1.06l-2.755-2.754ZM10.5 7a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0Z"
-                  clipRule="evenodd"
                 />
-              </svg>
-              <input
-                type="text"
-                value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
-                placeholder="Buscar por integrante..."
-                className="w-full pl-9 pr-10 py-2 bg-white border rounded-lg text-sm outline-none shadow-sm"
-                style={{
-                  borderColor: "var(--color-warm-gray)",
-                  color: "var(--color-navy)",
-                }}
-              />
-              {busqueda && (
-                <button
-                  onClick={() => setBusqueda("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer"
+                {busqueda && (
+                  <button
+                    onClick={() => setBusqueda("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer"
+                    style={{ color: "var(--color-blue-light)" }}
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 16 16"
+                      fill="currentColor"
+                      className="w-4 h-4"
+                    >
+                      <path d="M5.28 4.22a.75.75 0 0 0-1.06 1.06L6.94 8l-2.72 2.72a.75.75 0 1 0 1.06 1.06L8 9.06l2.72 2.72a.75.75 0 1 0 1.06-1.06L9.06 8l2.72-2.72a.75.75 0 0 0-1.06-1.06L8 6.94 5.28 4.22Z" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+
+              <div
+                className="bg-white rounded-xl shadow border overflow-x-auto"
+                style={{ borderColor: "var(--color-warm-gray)" }}
+              >
+                <table className="w-full text-xs border-collapse">
+                  <thead>
+                    <tr
+                      className="text-[10px] uppercase font-semibold"
+                      style={{
+                        backgroundColor: "#F7F5F3",
+                        color: "var(--color-blue-light)",
+                      }}
+                    >
+                      <th
+                        className="text-left px-5 py-3 border-b"
+                        style={{ borderColor: "var(--color-warm-gray)" }}
+                      >
+                        Alumno
+                      </th>
+                      {cursoData.evaluaciones.map((ev) => (
+                        <th
+                          key={ev.id}
+                          className="text-center px-4 py-3 border-b whitespace-nowrap"
+                          style={{
+                            borderColor: "var(--color-warm-gray)",
+                            color: "var(--color-primary)",
+                          }}
+                        >
+                          {ev.nombre}
+                          <br />
+                          <span
+                            className="font-normal"
+                            style={{ color: "var(--color-blue-light)" }}
+                          >
+                            Nota Final
+                          </span>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {seguimientoFiltrado.map((est, idx) => {
+                      const notas = est.evaluaciones
+                        .map((e) => e.notaFinal)
+                        .filter((n): n is number => n !== undefined);
+                      const maxNota =
+                        notas.length >= 2 ? Math.max(...notas) : null;
+                      const minNota =
+                        notas.length >= 2 ? Math.min(...notas) : null;
+
+                      return (
+                        <tr
+                          key={idx}
+                          className="border-b last:border-0"
+                          style={{ borderColor: "#F3F0ED" }}
+                        >
+                          <td className="px-5 py-2.5">
+                            <span
+                              className="font-medium text-sm"
+                              style={{ color: "var(--color-navy)" }}
+                            >
+                              {est.identificacion}
+                            </span>
+                          </td>
+                          {cursoData.evaluaciones.map((ev) => {
+                            const datos = est.evaluaciones.find(
+                              (e) => e.evalId === ev.id,
+                            );
+                            const nota = datos?.notaFinal;
+                            const esMax =
+                              nota !== undefined &&
+                              nota === maxNota &&
+                              maxNota !== minNota;
+                            const esMin =
+                              nota !== undefined &&
+                              nota === minNota &&
+                              maxNota !== minNota;
+                            return (
+                              <td
+                                key={ev.id}
+                                className="px-4 py-2.5 text-center"
+                              >
+                                {nota !== undefined ? (
+                                  <span
+                                    className="font-bold text-xs px-2 py-0.5 rounded"
+                                    style={
+                                      esMax
+                                        ? {
+                                            backgroundColor: "#C6EFCE",
+                                            color: "#276221",
+                                          }
+                                        : esMin
+                                          ? {
+                                              backgroundColor: "#FFC7CE",
+                                              color: "#9C0006",
+                                            }
+                                          : {
+                                              backgroundColor: "#F3F0ED",
+                                              color: "var(--color-blue-mid)",
+                                            }
+                                    }
+                                  >
+                                    {nota}
+                                  </span>
+                                ) : (
+                                  <span
+                                    style={{
+                                      color: "var(--color-warm-gray)",
+                                    }}
+                                  >
+                                    —
+                                  </span>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
+                    {seguimientoFiltrado.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={cursoData.evaluaciones.length + 1}
+                          className="px-5 py-8 text-center text-sm"
+                          style={{ color: "var(--color-blue-light)" }}
+                        >
+                          No se encontraron estudiantes
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            /* ─── Modo normal (grupos de la evaluación activa) ─────────── */
+            <>
+              {/* Configuración de castigos */}
+              <div
+                className="bg-white p-6 rounded-xl shadow-sm border mb-6"
+                style={{ borderColor: "var(--color-warm-gray)" }}
+              >
+                <h2
+                  className="text-lg font-bold mb-1"
+                  style={{ color: "var(--color-primary)" }}
+                >
+                  Configuración de castigos
+                </h2>
+                <p
+                  className="text-xs mb-4"
                   style={{ color: "var(--color-blue-light)" }}
                 >
+                  Fracción máxima de reducción sobre la proporción del
+                  estudiante (0 a 100%).
+                </p>
+                <div className="flex gap-8 flex-wrap">
+                  <div className="flex flex-col gap-1">
+                    <label
+                      className="text-xs font-semibold uppercase"
+                      style={{ color: "var(--color-primary-mid)" }}
+                    >
+                      Máx. castigo por evaluar fuera del grupo
+                    </label>
+                    <div className="relative flex items-center">
+                      <input
+                        type="number"
+                        step="1"
+                        min="0"
+                        max="100"
+                        value={rawFueraGrupo}
+                        onChange={(e) => setRawFueraGrupo(e.target.value)}
+                        onBlur={() => {
+                          const n = Math.min(
+                            100,
+                            Math.max(0, parseFloat(rawFueraGrupo) || 0),
+                          );
+                          setRawFueraGrupo(String(n));
+                          setConfig((prev) => ({
+                            ...prev,
+                            maxCastigoFueraGrupo: n / 100,
+                          }));
+                        }}
+                        className="p-2 border rounded text-sm w-28 outline-none pr-7"
+                        style={{ borderColor: "var(--color-warm-gray)" }}
+                      />
+                      <span
+                        className="absolute right-2 text-xs font-bold pointer-events-none"
+                        style={{ color: "var(--color-primary-mid)" }}
+                      >
+                        %
+                      </span>
+                    </div>
+                    <span
+                      className="text-[10px]"
+                      style={{ color: "var(--color-blue-light)" }}
+                    >
+                      × cada evaluación inválida
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label
+                      className="text-xs font-semibold uppercase"
+                      style={{ color: "var(--color-primary-warm)" }}
+                    >
+                      Máx. castigo por no evaluar compañeros
+                    </label>
+                    <div className="relative flex items-center">
+                      <input
+                        type="number"
+                        step="1"
+                        min="0"
+                        max="100"
+                        value={rawNoEvaluo}
+                        onChange={(e) => setRawNoEvaluo(e.target.value)}
+                        onBlur={() => {
+                          const n = Math.min(
+                            100,
+                            Math.max(0, parseFloat(rawNoEvaluo) || 0),
+                          );
+                          setRawNoEvaluo(String(n));
+                          setConfig((prev) => ({
+                            ...prev,
+                            maxCastigoNoEvaluo: n / 100,
+                          }));
+                        }}
+                        className="p-2 border rounded text-sm w-28 outline-none pr-7"
+                        style={{ borderColor: "var(--color-warm-gray)" }}
+                      />
+                      <span
+                        className="absolute right-2 text-xs font-bold pointer-events-none"
+                        style={{ color: "var(--color-primary-warm)" }}
+                      >
+                        %
+                      </span>
+                    </div>
+                    <span
+                      className="text-[10px]"
+                      style={{ color: "var(--color-blue-light)" }}
+                    >
+                      × (no evaluados / compañeros totales)
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Barra de controles + searchbar */}
+              <div className="flex flex-col gap-3 mb-4">
+                <div className="flex justify-between items-center">
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() =>
+                        evalActiva &&
+                        toggleTodos(key, evalActiva.grupos, !allExpanded)
+                      }
+                      className="flex items-center gap-2 px-4 py-2 bg-white border font-medium rounded-lg transition text-sm shadow-sm cursor-pointer"
+                      style={{
+                        color: "var(--color-blue-mid)",
+                        borderColor: "var(--color-warm-gray)",
+                      }}
+                    >
+                      {allExpanded ? (
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 16 16"
+                          fill="currentColor"
+                          className="w-4 h-4"
+                        >
+                          <path d="M3.75 7.25a.75.75 0 0 0 0 1.5h8.5a.75.75 0 0 0 0-1.5h-8.5Z" />
+                        </svg>
+                      ) : (
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 16 16"
+                          fill="currentColor"
+                          className="w-4 h-4"
+                        >
+                          <path d="M8.75 3.75a.75.75 0 0 0-1.5 0v3.5h-3.5a.75.75 0 0 0 0 1.5h3.5v3.5a.75.75 0 0 0 1.5 0v-3.5h3.5a.75.75 0 0 0 0-1.5h-3.5v-3.5Z" />
+                        </svg>
+                      )}
+                      {allExpanded ? "Colapsar todos" : "Expandir todos"}
+                    </button>
+                    <button
+                      onClick={() =>
+                        evalActiva &&
+                        crearGrupoVacio(cursoData.id, evalActiva.id)
+                      }
+                      className="flex items-center gap-2 px-4 py-2 bg-white border font-medium rounded-lg transition text-sm shadow-sm cursor-pointer"
+                      style={{
+                        color: "var(--color-primary)",
+                        borderColor: "var(--color-primary)",
+                      }}
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 16 16"
+                        fill="currentColor"
+                        className="w-4 h-4"
+                      >
+                        <path d="M8.75 3.75a.75.75 0 0 0-1.5 0v3.5h-3.5a.75.75 0 0 0 0 1.5h3.5v3.5a.75.75 0 0 0 1.5 0v-3.5h3.5a.75.75 0 0 0 0-1.5h-3.5v-3.5Z" />
+                      </svg>
+                      Nuevo grupo
+                    </button>
+                  </div>
+                  <button
+                    onClick={aplicarNotasBrutas}
+                    className="px-5 py-2 text-white font-semibold rounded-lg transition cursor-pointer text-sm shadow"
+                    style={{ backgroundColor: "var(--color-primary)" }}
+                    onMouseOver={(e) =>
+                      (e.currentTarget.style.backgroundColor =
+                        "var(--color-primary-hover)")
+                    }
+                    onMouseOut={(e) =>
+                      (e.currentTarget.style.backgroundColor =
+                        "var(--color-primary)")
+                    }
+                  >
+                    Calcular notas finales
+                  </button>
+                </div>
+
+                {/* Searchbar */}
+                <div className="relative">
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     viewBox="0 0 16 16"
                     fill="currentColor"
-                    className="w-4 h-4"
+                    className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                    style={{ color: "var(--color-blue-light)" }}
                   >
-                    <path d="M5.28 4.22a.75.75 0 0 0-1.06 1.06L6.94 8l-2.72 2.72a.75.75 0 1 0 1.06 1.06L8 9.06l2.72 2.72a.75.75 0 1 0 1.06-1.06L9.06 8l2.72-2.72a.75.75 0 0 0-1.06-1.06L8 6.94 5.28 4.22Z" />
+                    <path
+                      fillRule="evenodd"
+                      d="M9.965 11.026a5 5 0 1 1 1.06-1.06l2.755 2.754a.75.75 0 1 1-1.06 1.06l-2.755-2.754ZM10.5 7a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0Z"
+                      clipRule="evenodd"
+                    />
                   </svg>
-                </button>
-              )}
-            </div>
-            {busqueda && (
-              <p
-                className="text-xs"
-                style={{ color: "var(--color-blue-light)" }}
-              >
-                {gruposFiltrados.length === 0
-                  ? "Sin resultados"
-                  : `${gruposFiltrados.length} grupo${gruposFiltrados.length !== 1 ? "s" : ""} con "${busqueda}"`}
-              </p>
-            )}
-          </div>
-
-          {/* Grid de grupos */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            {gruposFiltrados.map((grupo) => {
-              const expandido = estaExpandido(cursoData.id, grupo.numero);
-              const editando = estaEditando(cursoData.id, grupo.numero);
-
-              return (
-                <div
-                  key={grupo.numero}
-                  className="bg-white rounded-xl shadow border flex flex-col overflow-hidden"
-                  style={{ borderColor: "var(--color-warm-gray)" }}
-                >
-                  <div
-                    className={`flex items-center gap-3 px-5 py-4 border-b select-none transition-colors ${editando ? "" : "cursor-pointer"}`}
+                  <input
+                    type="text"
+                    value={busqueda}
+                    onChange={(e) => setBusqueda(e.target.value)}
+                    placeholder="Buscar por integrante..."
+                    className="w-full pl-9 pr-10 py-2 bg-white border rounded-lg text-sm outline-none shadow-sm"
                     style={{
                       borderColor: "var(--color-warm-gray)",
-                      backgroundColor: editando ? "#FFF5F5" : undefined,
+                      color: "var(--color-navy)",
                     }}
-                    onClick={() =>
-                      !editando && toggleGrupo(cursoData.id, grupo.numero)
-                    }
-                    onMouseOver={(e) => {
-                      if (!editando)
-                        (e.currentTarget as HTMLElement).style.backgroundColor =
-                          "#FFF5F5";
-                    }}
-                    onMouseOut={(e) => {
-                      if (!editando)
-                        (e.currentTarget as HTMLElement).style.backgroundColor =
-                          "";
-                    }}
-                  >
-                    {!editando && (
-                      <span
-                        className="text-sm font-bold transition-transform duration-200"
-                        style={{
-                          display: "inline-block",
-                          color: "var(--color-primary)",
-                          transform: expandido
-                            ? "rotate(90deg)"
-                            : "rotate(0deg)",
-                        }}
-                      >
-                        ▶
-                      </span>
-                    )}
-                    <h4
-                      className="font-bold text-lg flex-1"
-                      style={{ color: "var(--color-primary)" }}
+                  />
+                  {busqueda && (
+                    <button
+                      onClick={() => setBusqueda("")}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer"
+                      style={{ color: "var(--color-blue-light)" }}
                     >
-                      Grupo {grupo.numero}
-                    </h4>
-
-                    {!editando && (
-                      <div
-                        className="flex items-center gap-1.5"
-                        onClick={(e) => e.stopPropagation()}
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 16 16"
+                        fill="currentColor"
+                        className="w-4 h-4"
                       >
-                        <label
-                          className="text-[10px] font-bold uppercase whitespace-nowrap"
-                          style={{ color: "var(--color-blue-mid)" }}
-                        >
-                          Nota bruta
-                        </label>
-                        <input
-                          type="number"
-                          step="0.1"
-                          min="1"
-                          max="7"
-                          value={
-                            notasCurso[grupo.numero] ??
-                            grupo.promedio_bruto ??
-                            ""
-                          }
-                          onChange={(e) =>
-                            setNotaCurso(grupo.numero, e.target.value)
-                          }
-                          className="w-16 p-1.5 border rounded text-sm text-center outline-none font-semibold"
-                          style={{
-                            borderColor: "var(--color-warm-gray)",
-                            color: "var(--color-navy)",
-                            backgroundColor: "#F7F5F3",
-                          }}
-                        />
-                      </div>
-                    )}
-
-                    <div
-                      className="flex items-center gap-1.5 ml-2"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {!editando && (
-                        <button
-                          onClick={() => {
-                            abrirEdicion(cursoData.id, grupo.numero);
-                            setGruposExpandidos((prev) => {
-                              const set = new Set(prev[cursoData.id] ?? []);
-                              set.add(grupo.numero);
-                              return { ...prev, [cursoData.id]: set };
-                            });
-                          }}
-                          className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold border rounded transition cursor-pointer"
-                          style={{
-                            backgroundColor: "#F3F0ED",
-                            color: "var(--color-blue-mid)",
-                            borderColor: "var(--color-warm-gray)",
-                          }}
-                        >
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            viewBox="0 0 16 16"
-                            fill="currentColor"
-                            className="w-3 h-3"
-                          >
-                            <path d="M13.488 2.513a1.75 1.75 0 0 0-2.475 0L6.75 6.774a2.75 2.75 0 0 0-.596.892l-.848 2.047a.75.75 0 0 0 .98.98l2.047-.848a2.75 2.75 0 0 0 .892-.596l4.261-4.263a1.75 1.75 0 0 0 0-2.474ZM4.75 14a2.25 2.25 0 0 1-2.25-2.25V5.5A2.25 2.25 0 0 1 4.75 3.25H7a.75.75 0 0 1 0 1.5H4.75a.75.75 0 0 0-.75.75v6.25c0 .414.336.75.75.75H11a.75.75 0 0 0 .75-.75V9a.75.75 0 0 1 1.5 0v2.75A2.25 2.25 0 0 1 11 14H4.75Z" />
-                          </svg>
-                          Editar
-                        </button>
-                      )}
-                      <BtnEliminar
-                        onClick={() =>
-                          eliminarGrupo(cursoData.id, grupo.numero)
-                        }
-                        title="Eliminar grupo"
-                      />
-                    </div>
-                  </div>
-
-                  {editando && (
-                    <EditGrupo
-                      grupo={grupo}
-                      onSave={(g) =>
-                        guardarEdicionGrupo(cursoData.id, g, grupo.numero)
-                      }
-                      onCancel={() => cerrarEdicion(cursoData.id, grupo.numero)}
-                    />
-                  )}
-
-                  {!editando && expandido && (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs border-collapse">
-                        <thead>
-                          <tr
-                            className="text-[10px] uppercase font-semibold border-b"
-                            style={{
-                              color: "var(--color-blue-light)",
-                              borderColor: "var(--color-warm-gray)",
-                              backgroundColor: "#F7F5F3",
-                            }}
-                          >
-                            <th className="text-left px-5 py-2">Alumno</th>
-                            <th className="text-center px-3 py-2 whitespace-nowrap">
-                              Nota
-                              <br />
-                              Bruta
-                            </th>
-                            <th
-                              className="text-center px-3 py-2 whitespace-nowrap"
-                              style={{ color: "#16A34A" }}
-                            >
-                              Ev.
-                              <br />
-                              Par
-                            </th>
-                            <th
-                              className="text-center px-3 py-2 whitespace-nowrap"
-                              style={{ color: "var(--color-blue-mid)" }}
-                            >
-                              Auto
-                              <br />
-                              Eval.
-                            </th>
-                            <th
-                              className="text-center px-3 py-2 whitespace-nowrap"
-                              style={{ color: "var(--color-primary-warm)" }}
-                            >
-                              Desc.
-                              <br />
-                              No Evaluó
-                            </th>
-                            <th
-                              className="text-center px-3 py-2 whitespace-nowrap"
-                              style={{ color: "var(--color-primary-mid)" }}
-                            >
-                              Desc.
-                              <br />
-                              Grupo Ajeno
-                            </th>
-                            <th
-                              className="text-center px-3 py-2 whitespace-nowrap"
-                              style={{ color: "var(--color-primary)" }}
-                            >
-                              Nota
-                              <br />
-                              Final
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {grupo.estudiantes.map((est, idx) => (
-                            <tr
-                              key={idx}
-                              className="border-b last:border-0"
-                              style={{
-                                borderColor: "#F3F0ED",
-                                backgroundColor: estudiantesDuplicados.has(
-                                  est.identificacion,
-                                )
-                                  ? "#FFFBEB"
-                                  : undefined,
-                              }}
-                            >
-                              <td className="px-5 py-2.5">
-                                <span
-                                  className="font-medium text-sm"
-                                  style={{ color: "var(--color-navy)" }}
-                                  title={est.identificacion}
-                                >
-                                  {est.identificacion}
-                                  {estudiantesDuplicados.has(
-                                    est.identificacion,
-                                  ) && (
-                                    <span
-                                      className="ml-1 text-[10px] font-bold"
-                                      style={{ color: "#B45309" }}
-                                    >
-                                      ⚠
-                                    </span>
-                                  )}
-                                </span>
-                              </td>
-                              <td className="px-3 py-2.5 text-center">
-                                <span
-                                  className="font-semibold text-xs px-2 py-0.5 rounded"
-                                  style={{
-                                    color: "var(--color-blue-mid)",
-                                    backgroundColor: "#F3F0ED",
-                                  }}
-                                >
-                                  {grupo.promedio_bruto ?? "—"}
-                                </span>
-                              </td>
-                              <td className="px-3 py-2.5 text-center">
-                                {est.notaPar !== undefined ? (
-                                  <span
-                                    className="font-bold text-xs px-2 py-0.5 rounded border"
-                                    style={{
-                                      color: "#15803D",
-                                      backgroundColor: "#F0FDF4",
-                                      borderColor: "#BBF7D0",
-                                    }}
-                                  >
-                                    {est.notaPar}
-                                  </span>
-                                ) : (
-                                  <span
-                                    className="text-xs"
-                                    style={{ color: "var(--color-warm-gray)" }}
-                                  >
-                                    —
-                                  </span>
-                                )}
-                              </td>
-                              <td className="px-3 py-2.5 text-center">
-                                {est.notaAuto !== undefined ? (
-                                  <span
-                                    className="font-semibold text-xs px-2 py-0.5 rounded border"
-                                    style={{
-                                      color: "var(--color-blue-dark)",
-                                      backgroundColor: "#EEF2F5",
-                                      borderColor: "var(--color-blue-light)",
-                                    }}
-                                  >
-                                    {est.notaAuto}
-                                  </span>
-                                ) : (
-                                  <span
-                                    className="text-xs"
-                                    style={{ color: "var(--color-warm-gray)" }}
-                                  >
-                                    —
-                                  </span>
-                                )}
-                              </td>
-                              <td className="px-3 py-2.5 text-center">
-                                {est.factorCastigoNoEvaluo !== undefined ? (
-                                  <span
-                                    className="text-xs font-semibold px-2 py-0.5 rounded"
-                                    style={
-                                      est.factorCastigoNoEvaluo > 0
-                                        ? {
-                                            color: "var(--color-primary-warm)",
-                                            backgroundColor: "#FEF3EE",
-                                            border: "1px solid #FBCAB4",
-                                          }
-                                        : { color: "var(--color-warm-gray)" }
-                                    }
-                                  >
-                                    {est.factorCastigoNoEvaluo > 0
-                                      ? `-${(est.factorCastigoNoEvaluo * 100).toFixed(0)}%`
-                                      : "0%"}
-                                    {est.descuentoManual && (
-                                      <span className="ml-1 text-[9px] opacity-60">
-                                        ✎
-                                      </span>
-                                    )}
-                                  </span>
-                                ) : (
-                                  <span
-                                    className="text-xs"
-                                    style={{ color: "var(--color-warm-gray)" }}
-                                  >
-                                    —
-                                  </span>
-                                )}
-                              </td>
-                              <td className="px-3 py-2.5 text-center">
-                                {est.factorCastigoFueraGrupo !== undefined ? (
-                                  <span
-                                    className="text-xs font-semibold px-2 py-0.5 rounded"
-                                    style={
-                                      est.factorCastigoFueraGrupo > 0
-                                        ? {
-                                            color: "var(--color-primary-mid)",
-                                            backgroundColor: "#FEF2F2",
-                                            border: "1px solid #FECACA",
-                                          }
-                                        : { color: "var(--color-warm-gray)" }
-                                    }
-                                  >
-                                    {est.factorCastigoFueraGrupo > 0
-                                      ? `-${(est.factorCastigoFueraGrupo * 100).toFixed(0)}%`
-                                      : "0%"}
-                                    {est.descuentoManual && (
-                                      <span className="ml-1 text-[9px] opacity-60">
-                                        ✎
-                                      </span>
-                                    )}
-                                  </span>
-                                ) : (
-                                  <span
-                                    className="text-xs"
-                                    style={{ color: "var(--color-warm-gray)" }}
-                                  >
-                                    —
-                                  </span>
-                                )}
-                              </td>
-                              <td className="px-3 py-2.5 text-center">
-                                {est.notaConDescuento !== undefined ? (
-                                  <span
-                                    className="font-bold text-white text-xs px-2.5 py-0.5 rounded shadow-sm"
-                                    style={{
-                                      backgroundColor: "var(--color-primary)",
-                                    }}
-                                  >
-                                    {est.notaConDescuento}
-                                  </span>
-                                ) : (
-                                  <span
-                                    className="text-xs"
-                                    style={{ color: "var(--color-warm-gray)" }}
-                                  >
-                                    —
-                                  </span>
-                                )}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                        <path d="M5.28 4.22a.75.75 0 0 0-1.06 1.06L6.94 8l-2.72 2.72a.75.75 0 1 0 1.06 1.06L8 9.06l2.72 2.72a.75.75 0 1 0 1.06-1.06L9.06 8l2.72-2.72a.75.75 0 0 0-1.06-1.06L8 6.94 5.28 4.22Z" />
+                      </svg>
+                    </button>
                   )}
                 </div>
-              );
-            })}
-          </div>
+                {busqueda && (
+                  <p
+                    className="text-xs"
+                    style={{ color: "var(--color-blue-light)" }}
+                  >
+                    {gruposFiltrados.length === 0
+                      ? "Sin resultados"
+                      : `${gruposFiltrados.length} grupo${gruposFiltrados.length !== 1 ? "s" : ""} con "${busqueda}"`}
+                  </p>
+                )}
+              </div>
+
+              {/* Grid de grupos */}
+              {evalActiva && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                  {gruposFiltrados.map((grupo) => {
+                    const expandido = estaExpandido(key, grupo.numero);
+                    const editando = estaEditando(
+                      cursoData.id,
+                      evalActiva.id,
+                      grupo.numero,
+                    );
+
+                    return (
+                      <div
+                        key={grupo.numero}
+                        className="bg-white rounded-xl shadow border flex flex-col overflow-hidden"
+                        style={{ borderColor: "var(--color-warm-gray)" }}
+                      >
+                        <div
+                          className={`flex items-center gap-3 px-5 py-4 border-b select-none transition-colors ${editando ? "" : "cursor-pointer"}`}
+                          style={{
+                            borderColor: "var(--color-warm-gray)",
+                            backgroundColor: editando ? "#FFF5F5" : undefined,
+                          }}
+                          onClick={() =>
+                            !editando && toggleGrupo(key, grupo.numero)
+                          }
+                          onMouseOver={(e) => {
+                            if (!editando)
+                              (
+                                e.currentTarget as HTMLElement
+                              ).style.backgroundColor = "#FFF5F5";
+                          }}
+                          onMouseOut={(e) => {
+                            if (!editando)
+                              (
+                                e.currentTarget as HTMLElement
+                              ).style.backgroundColor = "";
+                          }}
+                        >
+                          {!editando && (
+                            <span
+                              className="text-sm font-bold transition-transform duration-200"
+                              style={{
+                                display: "inline-block",
+                                color: "var(--color-primary)",
+                                transform: expandido
+                                  ? "rotate(90deg)"
+                                  : "rotate(0deg)",
+                              }}
+                            >
+                              ▶
+                            </span>
+                          )}
+                          <h4
+                            className="font-bold text-lg flex-1"
+                            style={{ color: "var(--color-primary)" }}
+                          >
+                            Grupo {grupo.numero}
+                          </h4>
+
+                          {!editando && (
+                            <div
+                              className="flex items-center gap-1.5"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <label
+                                className="text-[10px] font-bold uppercase whitespace-nowrap"
+                                style={{ color: "var(--color-blue-mid)" }}
+                              >
+                                Nota bruta
+                              </label>
+                              <input
+                                type="number"
+                                step="0.1"
+                                min="1"
+                                max="7"
+                                value={
+                                  notasEval[grupo.numero] ??
+                                  grupo.promedio_bruto ??
+                                  ""
+                                }
+                                onChange={(e) =>
+                                  setNotaCurso(grupo.numero, e.target.value)
+                                }
+                                className="w-16 p-1.5 border rounded text-sm text-center outline-none font-semibold"
+                                style={{
+                                  borderColor: "var(--color-warm-gray)",
+                                  color: "var(--color-navy)",
+                                  backgroundColor: "#F7F5F3",
+                                }}
+                              />
+                            </div>
+                          )}
+
+                          <div
+                            className="flex items-center gap-1.5 ml-2"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {!editando && (
+                              <button
+                                onClick={() => {
+                                  abrirEdicion(
+                                    cursoData.id,
+                                    evalActiva.id,
+                                    grupo.numero,
+                                  );
+                                  setGruposExpandidos((prev) => {
+                                    const set = new Set(prev[key] ?? []);
+                                    set.add(grupo.numero);
+                                    return { ...prev, [key]: set };
+                                  });
+                                }}
+                                className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold border rounded transition cursor-pointer"
+                                style={{
+                                  backgroundColor: "#F3F0ED",
+                                  color: "var(--color-blue-mid)",
+                                  borderColor: "var(--color-warm-gray)",
+                                }}
+                              >
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  viewBox="0 0 16 16"
+                                  fill="currentColor"
+                                  className="w-3 h-3"
+                                >
+                                  <path d="M13.488 2.513a1.75 1.75 0 0 0-2.475 0L6.75 6.774a2.75 2.75 0 0 0-.596.892l-.848 2.047a.75.75 0 0 0 .98.98l2.047-.848a2.75 2.75 0 0 0 .892-.596l4.261-4.263a1.75 1.75 0 0 0 0-2.474ZM4.75 14a2.25 2.25 0 0 1-2.25-2.25V5.5A2.25 2.25 0 0 1 4.75 3.25H7a.75.75 0 0 1 0 1.5H4.75a.75.75 0 0 0-.75.75v6.25c0 .414.336.75.75.75H11a.75.75 0 0 0 .75-.75V9a.75.75 0 0 1 1.5 0v2.75A2.25 2.25 0 0 1 11 14H4.75Z" />
+                                </svg>
+                                Editar
+                              </button>
+                            )}
+                            <BtnEliminar
+                              onClick={() =>
+                                eliminarGrupo(
+                                  cursoData.id,
+                                  evalActiva.id,
+                                  grupo.numero,
+                                )
+                              }
+                              title="Eliminar grupo"
+                            />
+                          </div>
+                        </div>
+
+                        {editando && (
+                          <EditGrupo
+                            grupo={grupo}
+                            onSave={(g) =>
+                              guardarEdicionGrupo(
+                                cursoData.id,
+                                evalActiva.id,
+                                g,
+                                grupo.numero,
+                              )
+                            }
+                            onCancel={() =>
+                              cerrarEdicion(
+                                cursoData.id,
+                                evalActiva.id,
+                                grupo.numero,
+                              )
+                            }
+                          />
+                        )}
+
+                        {!editando && expandido && (
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-xs border-collapse">
+                              <thead>
+                                <tr
+                                  className="text-[10px] uppercase font-semibold border-b"
+                                  style={{
+                                    color: "var(--color-blue-light)",
+                                    borderColor: "var(--color-warm-gray)",
+                                    backgroundColor: "#F7F5F3",
+                                  }}
+                                >
+                                  <th className="text-left px-5 py-2">
+                                    Alumno
+                                  </th>
+                                  <th className="text-center px-3 py-2 whitespace-nowrap">
+                                    Nota
+                                    <br />
+                                    Bruta
+                                  </th>
+                                  <th
+                                    className="text-center px-3 py-2 whitespace-nowrap"
+                                    style={{ color: "#16A34A" }}
+                                  >
+                                    Ev.
+                                    <br />
+                                    Par
+                                  </th>
+                                  <th
+                                    className="text-center px-3 py-2 whitespace-nowrap"
+                                    style={{ color: "var(--color-blue-mid)" }}
+                                  >
+                                    Auto
+                                    <br />
+                                    Eval.
+                                  </th>
+                                  <th
+                                    className="text-center px-3 py-2 whitespace-nowrap"
+                                    style={{
+                                      color: "var(--color-primary-warm)",
+                                    }}
+                                  >
+                                    Desc.
+                                    <br />
+                                    No Evaluó
+                                  </th>
+                                  <th
+                                    className="text-center px-3 py-2 whitespace-nowrap"
+                                    style={{
+                                      color: "var(--color-primary-mid)",
+                                    }}
+                                  >
+                                    Desc.
+                                    <br />
+                                    Grupo Ajeno
+                                  </th>
+                                  <th
+                                    className="text-center px-3 py-2 whitespace-nowrap"
+                                    style={{ color: "var(--color-primary)" }}
+                                  >
+                                    Nota
+                                    <br />
+                                    Final
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {grupo.estudiantes.map((est, idx) => (
+                                  <tr
+                                    key={idx}
+                                    className="border-b last:border-0"
+                                    style={{
+                                      borderColor: "#F3F0ED",
+                                      backgroundColor:
+                                        estudiantesDuplicados.has(
+                                          est.identificacion,
+                                        )
+                                          ? "#FFFBEB"
+                                          : undefined,
+                                    }}
+                                  >
+                                    <td className="px-5 py-2.5">
+                                      <span
+                                        className="font-medium text-sm"
+                                        style={{ color: "var(--color-navy)" }}
+                                        title={est.identificacion}
+                                      >
+                                        {est.identificacion}
+                                        {estudiantesDuplicados.has(
+                                          est.identificacion,
+                                        ) && (
+                                          <span
+                                            className="ml-1 text-[10px] font-bold"
+                                            style={{ color: "#B45309" }}
+                                          >
+                                            ⚠
+                                          </span>
+                                        )}
+                                      </span>
+                                    </td>
+                                    <td className="px-3 py-2.5 text-center">
+                                      <span
+                                        className="font-semibold text-xs px-2 py-0.5 rounded"
+                                        style={{
+                                          color: "var(--color-blue-mid)",
+                                          backgroundColor: "#F3F0ED",
+                                        }}
+                                      >
+                                        {grupo.promedio_bruto ?? "—"}
+                                      </span>
+                                    </td>
+                                    <td className="px-3 py-2.5 text-center">
+                                      {est.notaPar !== undefined ? (
+                                        <span
+                                          className="font-bold text-xs px-2 py-0.5 rounded border"
+                                          style={{
+                                            color: "#15803D",
+                                            backgroundColor: "#F0FDF4",
+                                            borderColor: "#BBF7D0",
+                                          }}
+                                        >
+                                          {est.notaPar}
+                                        </span>
+                                      ) : (
+                                        <span
+                                          className="text-xs"
+                                          style={{
+                                            color: "var(--color-warm-gray)",
+                                          }}
+                                        >
+                                          —
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="px-3 py-2.5 text-center">
+                                      {est.notaAuto !== undefined ? (
+                                        <span
+                                          className="font-semibold text-xs px-2 py-0.5 rounded border"
+                                          style={{
+                                            color: "var(--color-blue-dark)",
+                                            backgroundColor: "#EEF2F5",
+                                            borderColor:
+                                              "var(--color-blue-light)",
+                                          }}
+                                        >
+                                          {est.notaAuto}
+                                        </span>
+                                      ) : (
+                                        <span
+                                          className="text-xs"
+                                          style={{
+                                            color: "var(--color-warm-gray)",
+                                          }}
+                                        >
+                                          —
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="px-3 py-2.5 text-center">
+                                      {est.factorCastigoNoEvaluo !==
+                                      undefined ? (
+                                        <span
+                                          className="text-xs font-semibold px-2 py-0.5 rounded"
+                                          style={
+                                            est.factorCastigoNoEvaluo > 0
+                                              ? {
+                                                  color:
+                                                    "var(--color-primary-warm)",
+                                                  backgroundColor: "#FEF3EE",
+                                                  border: "1px solid #FBCAB4",
+                                                }
+                                              : {
+                                                  color:
+                                                    "var(--color-warm-gray)",
+                                                }
+                                          }
+                                        >
+                                          {est.factorCastigoNoEvaluo > 0
+                                            ? `-${(est.factorCastigoNoEvaluo * 100).toFixed(0)}%`
+                                            : "0%"}
+                                          {est.descuentoManual && (
+                                            <span className="ml-1 text-[9px] opacity-60">
+                                              ✎
+                                            </span>
+                                          )}
+                                        </span>
+                                      ) : (
+                                        <span
+                                          className="text-xs"
+                                          style={{
+                                            color: "var(--color-warm-gray)",
+                                          }}
+                                        >
+                                          —
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="px-3 py-2.5 text-center">
+                                      {est.factorCastigoFueraGrupo !==
+                                      undefined ? (
+                                        <span
+                                          className="text-xs font-semibold px-2 py-0.5 rounded"
+                                          style={
+                                            est.factorCastigoFueraGrupo > 0
+                                              ? {
+                                                  color:
+                                                    "var(--color-primary-mid)",
+                                                  backgroundColor: "#FEF2F2",
+                                                  border: "1px solid #FECACA",
+                                                }
+                                              : {
+                                                  color:
+                                                    "var(--color-warm-gray)",
+                                                }
+                                          }
+                                        >
+                                          {est.factorCastigoFueraGrupo > 0
+                                            ? `-${(est.factorCastigoFueraGrupo * 100).toFixed(0)}%`
+                                            : "0%"}
+                                          {est.descuentoManual && (
+                                            <span className="ml-1 text-[9px] opacity-60">
+                                              ✎
+                                            </span>
+                                          )}
+                                        </span>
+                                      ) : (
+                                        <span
+                                          className="text-xs"
+                                          style={{
+                                            color: "var(--color-warm-gray)",
+                                          }}
+                                        >
+                                          —
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="px-3 py-2.5 text-center">
+                                      {est.notaConDescuento !== undefined ? (
+                                        <span
+                                          className="font-bold text-white text-xs px-2.5 py-0.5 rounded shadow-sm"
+                                          style={{
+                                            backgroundColor:
+                                              "var(--color-primary)",
+                                          }}
+                                        >
+                                          {est.notaConDescuento}
+                                        </span>
+                                      ) : (
+                                        <span
+                                          className="text-xs"
+                                          style={{
+                                            color: "var(--color-warm-gray)",
+                                          }}
+                                        >
+                                          —
+                                        </span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
         </div>
       </div>
     );
@@ -1723,70 +2293,103 @@ function App() {
           Cursos Creados
         </h2>
         <div className="grid grid-cols-1 gap-4">
-          {cursos.map((curso) => (
-            <div
-              key={curso.id}
-              onClick={() => setCursoActivo(curso)}
-              className="bg-white p-5 rounded-xl shadow-sm border transition cursor-pointer flex justify-between items-center group"
-              style={{ borderColor: "var(--color-warm-gray)" }}
-              onMouseOver={(e) => {
-                (e.currentTarget as HTMLElement).style.borderColor =
-                  "var(--color-primary)";
-                (e.currentTarget as HTMLElement).style.boxShadow =
-                  "0 4px 12px rgba(206,0,25,0.08)";
-              }}
-              onMouseOut={(e) => {
-                (e.currentTarget as HTMLElement).style.borderColor =
-                  "var(--color-warm-gray)";
-                (e.currentTarget as HTMLElement).style.boxShadow = "";
-              }}
-            >
-              <h3
-                className="text-xl font-bold"
-                style={{ color: "var(--color-navy)" }}
+          {cursos.map((curso) => {
+            // Badge muestra los grupos de la evaluación activa (o la primera)
+            const evalParaBadge =
+              evalActivaId[curso.id] && evalActivaId[curso.id] !== "seguimiento"
+                ? (curso.evaluaciones.find(
+                    (e) => e.id === evalActivaId[curso.id],
+                  ) ?? curso.evaluaciones[0])
+                : curso.evaluaciones[0];
+
+            return (
+              <div
+                key={curso.id}
+                onClick={() => setCursoActivo(curso)}
+                className="bg-white p-5 rounded-xl shadow-sm border transition cursor-pointer flex justify-between items-start group"
+                style={{ borderColor: "var(--color-warm-gray)" }}
+                onMouseOver={(e) => {
+                  (e.currentTarget as HTMLElement).style.borderColor =
+                    "var(--color-primary)";
+                  (e.currentTarget as HTMLElement).style.boxShadow =
+                    "0 4px 12px rgba(206,0,25,0.08)";
+                }}
+                onMouseOut={(e) => {
+                  (e.currentTarget as HTMLElement).style.borderColor =
+                    "var(--color-warm-gray)";
+                  (e.currentTarget as HTMLElement).style.boxShadow = "";
+                }}
               >
-                {curso.nombre}
-              </h3>
-              <div className="flex items-center gap-2">
-                <span
-                  className="text-sm py-1 px-3 rounded-full border"
-                  style={{
-                    color: "var(--color-primary)",
-                    backgroundColor: "#FFF5F5",
-                    borderColor: "#FECDD3",
-                  }}
-                >
-                  {curso.grupos.length} grupos →
-                </span>
-                <button
-                  onClick={(e) => handleEliminarCurso(e, curso.id)}
-                  title="Eliminar curso"
-                  className="flex items-center justify-center w-7 h-7 rounded-full transition cursor-pointer"
-                  style={{ color: "var(--color-warm-gray)" }}
-                  onMouseOver={(e) => {
-                    (e.currentTarget as HTMLElement).style.backgroundColor =
-                      "#FEE2E2";
-                    (e.currentTarget as HTMLElement).style.color =
-                      "var(--color-primary)";
-                  }}
-                  onMouseOut={(e) => {
-                    (e.currentTarget as HTMLElement).style.backgroundColor = "";
-                    (e.currentTarget as HTMLElement).style.color =
-                      "var(--color-warm-gray)";
-                  }}
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 16 16"
-                    fill="currentColor"
-                    className="w-4 h-4"
+                <div className="flex flex-col gap-2">
+                  <h3
+                    className="text-xl font-bold"
+                    style={{ color: "var(--color-navy)" }}
                   >
-                    <path d="M5.28 4.22a.75.75 0 0 0-1.06 1.06L6.94 8l-2.72 2.72a.75.75 0 1 0 1.06 1.06L8 9.06l2.72 2.72a.75.75 0 1 0 1.06-1.06L9.06 8l2.72-2.72a.75.75 0 0 0-1.06-1.06L8 6.94 5.28 4.22Z" />
-                  </svg>
-                </button>
+                    {curso.nombre}
+                  </h3>
+                  {/* Chips de evaluaciones */}
+                  {curso.evaluaciones.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {curso.evaluaciones.map((ev) => (
+                        <span
+                          key={ev.id}
+                          className="text-[10px] px-2 py-0.5 rounded-full font-medium"
+                          style={{
+                            backgroundColor: "#FFF5F5",
+                            color: "var(--color-primary)",
+                            border: "1px solid #FECDD3",
+                          }}
+                        >
+                          {ev.nombre}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 shrink-0 ml-4">
+                  <span
+                    className="text-sm py-1 px-3 rounded-full border whitespace-nowrap"
+                    style={{
+                      color: "var(--color-primary)",
+                      backgroundColor: "#FFF5F5",
+                      borderColor: "#FECDD3",
+                    }}
+                  >
+                    {evalParaBadge
+                      ? `${evalParaBadge.grupos.length} grupos →`
+                      : "0 grupos →"}
+                  </span>
+                  <button
+                    onClick={(e) => handleEliminarCurso(e, curso.id)}
+                    title="Eliminar curso"
+                    className="flex items-center justify-center w-7 h-7 rounded-full transition cursor-pointer"
+                    style={{ color: "var(--color-warm-gray)" }}
+                    onMouseOver={(e) => {
+                      (e.currentTarget as HTMLElement).style.backgroundColor =
+                        "#FEE2E2";
+                      (e.currentTarget as HTMLElement).style.color =
+                        "var(--color-primary)";
+                    }}
+                    onMouseOut={(e) => {
+                      (e.currentTarget as HTMLElement).style.backgroundColor =
+                        "";
+                      (e.currentTarget as HTMLElement).style.color =
+                        "var(--color-warm-gray)";
+                    }}
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 16 16"
+                      fill="currentColor"
+                      className="w-4 h-4"
+                    >
+                      <path d="M5.28 4.22a.75.75 0 0 0-1.06 1.06L6.94 8l-2.72 2.72a.75.75 0 1 0 1.06 1.06L8 9.06l2.72 2.72a.75.75 0 1 0 1.06-1.06L9.06 8l2.72-2.72a.75.75 0 0 0-1.06-1.06L8 6.94 5.28 4.22Z" />
+                    </svg>
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>

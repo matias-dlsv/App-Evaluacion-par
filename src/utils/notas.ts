@@ -25,10 +25,16 @@ export interface Grupo {
   estudiantes: Estudiante[];
 }
 
-export interface Curso {
+export interface Evaluacion {
   id: string;
   nombre: string;
   grupos: Grupo[];
+}
+
+export interface Curso {
+  id: string;
+  nombre: string;
+  evaluaciones: Evaluacion[];
 }
 
 export interface ConfigDescuentos {
@@ -41,12 +47,100 @@ export const DEFAULT_DESCUENTOS: ConfigDescuentos = {
   maxCastigoNoEvaluo: 0.1,
 };
 
+export interface EstudianteSeguimiento {
+  identificacion: string;
+  evaluaciones: {
+    evalId: string;
+    evalNombre: string;
+    grupo: string;
+    notaGrupo?: number;
+    notaFinal?: number;
+    notaPar?: number;
+    factorCastigoTotal?: number;
+  }[];
+}
+
+/**
+ * Migra un curso del formato viejo (grupos directamente en el curso)
+ * al nuevo formato (grupos dentro de evaluaciones).
+ * Si el curso ya tiene evaluaciones, lo retorna sin cambios.
+ */
+export function migrarCurso(curso: any): Curso {
+  if (curso.evaluaciones && Array.isArray(curso.evaluaciones)) {
+    return curso as Curso;
+  }
+  return {
+    id: curso.id,
+    nombre: curso.nombre,
+    evaluaciones: [
+      {
+        id: crypto.randomUUID(),
+        nombre: "Evaluación 1",
+        grupos: curso.grupos || [],
+      },
+    ],
+  };
+}
+
+/**
+ * Construye el seguimiento longitudinal de cada estudiante a través
+ * de todas las evaluaciones del curso. Matching exacto por identificacion.
+ * Si un estudiante aparece en varios grupos de la misma evaluación,
+ * se toma solo la primera ocurrencia.
+ * Resultado ordenado alfabéticamente por identificacion.
+ */
+export function construirSeguimiento(curso: Curso): EstudianteSeguimiento[] {
+  const mapa = new Map<string, EstudianteSeguimiento>();
+
+  curso.evaluaciones.forEach((evaluacion) => {
+    const vistoEnEval = new Set<string>();
+    evaluacion.grupos.forEach((grupo) => {
+      grupo.estudiantes.forEach((est) => {
+        if (!mapa.has(est.identificacion)) {
+          mapa.set(est.identificacion, {
+            identificacion: est.identificacion,
+            evaluaciones: [],
+          });
+        }
+        if (!vistoEnEval.has(est.identificacion)) {
+          vistoEnEval.add(est.identificacion);
+          mapa.get(est.identificacion)!.evaluaciones.push({
+            evalId: evaluacion.id,
+            evalNombre: evaluacion.nombre,
+            grupo: grupo.numero,
+            notaGrupo: grupo.promedio_bruto,
+            notaFinal: est.notaConDescuento,
+            notaPar: est.notaPar,
+            factorCastigoTotal: est.factorCastigoTotal,
+          });
+        }
+      });
+    });
+  });
+
+  const resultado: EstudianteSeguimiento[] = [];
+  mapa.forEach((seg) => resultado.push(seg));
+
+  // Ordenar alfabéticamente por identificacion
+  resultado.sort((a, b) =>
+    a.identificacion.localeCompare(b.identificacion, "es", {
+      sensitivity: "base",
+    })
+  );
+
+  return resultado;
+}
+
+/**
+ * Calcula las notas ajustadas de una evaluación.
+ * Recibe una Evaluacion y retorna la Evaluacion actualizada con los campos calculados.
+ */
 export function calcularNotasAjustadas(
-  curso: Curso,
+  evaluacion: Evaluacion,
   config: ConfigDescuentos = DEFAULT_DESCUENTOS
-): Curso {
+): Evaluacion {
   const estudianteAGrupos: Record<string, string[]> = {};
-  curso.grupos.forEach((grupo) => {
+  evaluacion.grupos.forEach((grupo) => {
     grupo.estudiantes.forEach((est) => {
       if (!estudianteAGrupos[est.identificacion]) {
         estudianteAGrupos[est.identificacion] = [];
@@ -55,7 +149,7 @@ export function calcularNotasAjustadas(
     });
   });
 
-  const gruposActualizados = curso.grupos.map((grupo) => {
+  const gruposActualizados = evaluacion.grupos.map((grupo) => {
     if (grupo.promedio_bruto === undefined) return grupo;
 
     const pozoTotal = grupo.promedio_bruto * grupo.estudiantes.length;
@@ -70,7 +164,8 @@ export function calcularNotasAjustadas(
     const estudiantesAjustados = grupo.estudiantes.map((est) => {
       if (est.notaPar === undefined) return est;
 
-      const proporcionBase = Math.round((est.notaPar / sumaNotasPar) * 1000) / 1000;
+      const proporcionBase =
+        Math.round((est.notaPar / sumaNotasPar) * 1000) / 1000;
 
       let factorCastigoFueraGrupo: number;
       let factorCastigoNoEvaluo: number;
@@ -81,24 +176,33 @@ export function calcularNotasAjustadas(
       } else {
         const invalidas = est.evaluacionesInvalidas ?? 0;
         factorCastigoFueraGrupo =
-          Math.round(Math.min(invalidas * config.maxCastigoFueraGrupo, 1) * 1000) / 1000;
+          Math.round(
+            Math.min(invalidas * config.maxCastigoFueraGrupo, 1) * 1000
+          ) / 1000;
 
         const evaluados = est.nombresEvaluados || [];
         const companeros = grupo.estudiantes
           .map((e) => e.identificacion)
           .filter((id) => id !== est.identificacion);
         const companerosSuGrupoEvaluados = evaluados.filter(
-          (nombre) => miembrosGrupo.has(nombre) && nombre !== est.identificacion
+          (nombre) =>
+            miembrosGrupo.has(nombre) && nombre !== est.identificacion
         ).length;
-        const noEvaluados = Math.max(0, companeros.length - companerosSuGrupoEvaluados);
+        const noEvaluados = Math.max(
+          0,
+          companeros.length - companerosSuGrupoEvaluados
+        );
         const fraccionNoEvaluada =
           companeros.length > 0 ? noEvaluados / companeros.length : 0;
         factorCastigoNoEvaluo =
-          Math.round(fraccionNoEvaluada * config.maxCastigoNoEvaluo * 1000) / 1000;
+          Math.round(
+            fraccionNoEvaluada * config.maxCastigoNoEvaluo * 1000
+          ) / 1000;
       }
 
       const factorCastigoTotal =
-        Math.round((factorCastigoFueraGrupo + factorCastigoNoEvaluo) * 1000) / 1000;
+        Math.round((factorCastigoFueraGrupo + factorCastigoNoEvaluo) * 1000) /
+        1000;
 
       const proporcionConCastigo =
         Math.round(proporcionBase * (1 - factorCastigoTotal) * 1000) / 1000;
@@ -106,7 +210,8 @@ export function calcularNotasAjustadas(
       let notaAjustada = Math.round(pozoTotal * proporcionBase * 10) / 10;
       if (notaAjustada > 7.0) notaAjustada = 7.0;
 
-      let notaConDescuento = Math.round(pozoTotal * proporcionConCastigo * 10) / 10;
+      let notaConDescuento =
+        Math.round(pozoTotal * proporcionConCastigo * 10) / 10;
       if (notaConDescuento > 7.0) notaConDescuento = 7.0;
 
       const gruposDuplicados =
@@ -132,5 +237,5 @@ export function calcularNotasAjustadas(
     return { ...grupo, estudiantes: estudiantesAjustados };
   });
 
-  return { ...curso, grupos: gruposActualizados };
+  return { ...evaluacion, grupos: gruposActualizados };
 }
