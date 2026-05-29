@@ -1,6 +1,6 @@
 // src/components/CursoView.tsx
 import { useState, useEffect, useRef } from "react";
-import { open, confirm, ask } from "@tauri-apps/plugin-dialog";
+import { open, confirm } from "@tauri-apps/plugin-dialog";
 import {
   Curso,
   Evaluacion,
