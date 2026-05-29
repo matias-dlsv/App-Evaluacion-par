@@ -7,6 +7,7 @@ import {
   exportarAutoevaluaciones,
   exportarSeguimiento,
 } from "../utils/exportarExcel";
+import { message } from "@tauri-apps/plugin-dialog";
 
 interface ExportMenuProps {
   cursoData: Curso;
@@ -35,10 +36,17 @@ export function ExportMenu({
           onClick={async () => {
             onClose();
             try {
-              await exportarResultados(cursoData, evalActiva);
-              alert("¡Excel exportado con éxito!");
+              const ok = await exportarResultados(cursoData, evalActiva);
+              if (ok)
+                await message("¡Excel exportado con éxito!", {
+                  title: "Exportación exitosa",
+                  kind: "info",
+                });
             } catch (e) {
-              alert("Error al exportar: " + String(e));
+              await message("Error al exportar: " + String(e), {
+                title: "Error",
+                kind: "error",
+              });
             }
           }}
           className="w-full flex items-center gap-3 px-4 py-3 text-sm hover:bg-gray-50 transition text-left"
@@ -55,13 +63,19 @@ export function ExportMenu({
           </svg>
           <div>
             <p className="font-semibold">Excel completo</p>
-            <p className="text-[11px]" style={{ color: "var(--color-blue-light)" }}>
+            <p
+              className="text-[11px]"
+              style={{ color: "var(--color-blue-light)" }}
+            >
               {evalActiva.nombre} — todos los grupos
             </p>
           </div>
         </button>
 
-        <div className="border-t" style={{ borderColor: "var(--color-warm-gray)" }} />
+        <div
+          className="border-t"
+          style={{ borderColor: "var(--color-warm-gray)" }}
+        />
 
         {/* Excel todos los grupos */}
         <button
@@ -88,7 +102,10 @@ export function ExportMenu({
           </svg>
           <div>
             <p className="font-semibold">Excel todos los grupos</p>
-            <p className="text-[11px]" style={{ color: "var(--color-blue-light)" }}>
+            <p
+              className="text-[11px]"
+              style={{ color: "var(--color-blue-light)" }}
+            >
               Un archivo por grupo en carpeta
             </p>
           </div>
@@ -97,7 +114,10 @@ export function ExportMenu({
         {/* Excel seguimiento — solo si ≥2 evaluaciones */}
         {cursoData.evaluaciones.length >= 2 && (
           <>
-            <div className="border-t" style={{ borderColor: "var(--color-warm-gray)" }} />
+            <div
+              className="border-t"
+              style={{ borderColor: "var(--color-warm-gray)" }}
+            />
             <button
               onClick={async () => {
                 onClose();
@@ -126,7 +146,10 @@ export function ExportMenu({
               </svg>
               <div>
                 <p className="font-semibold">Excel seguimiento</p>
-                <p className="text-[11px]" style={{ color: "var(--color-blue-light)" }}>
+                <p
+                  className="text-[11px]"
+                  style={{ color: "var(--color-blue-light)" }}
+                >
                   Tendencia longitudinal por alumno
                 </p>
               </div>
@@ -137,12 +160,18 @@ export function ExportMenu({
         {/* Autoevaluaciones */}
         {tieneAutoevaluaciones && (
           <>
-            <div className="border-t" style={{ borderColor: "var(--color-warm-gray)" }} />
+            <div
+              className="border-t"
+              style={{ borderColor: "var(--color-warm-gray)" }}
+            />
             <button
               onClick={async () => {
                 onClose();
                 try {
-                  const ok = await exportarAutoevaluaciones(cursoData, evalActiva);
+                  const ok = await exportarAutoevaluaciones(
+                    cursoData,
+                    evalActiva,
+                  );
                   if (ok) alert("¡Autoevaluaciones exportadas con éxito!");
                 } catch (e) {
                   alert("Error al exportar: " + String(e));
@@ -166,7 +195,10 @@ export function ExportMenu({
               </svg>
               <div>
                 <p className="font-semibold">Excel autoevaluaciones</p>
-                <p className="text-[11px]" style={{ color: "var(--color-blue-light)" }}>
+                <p
+                  className="text-[11px]"
+                  style={{ color: "var(--color-blue-light)" }}
+                >
                   Auto vs nota par por alumno
                 </p>
               </div>
@@ -174,7 +206,10 @@ export function ExportMenu({
           </>
         )}
 
-        <div className="border-t" style={{ borderColor: "var(--color-warm-gray)" }} />
+        <div
+          className="border-t"
+          style={{ borderColor: "var(--color-warm-gray)" }}
+        />
 
         {/* Excel por grupo individual */}
         <div className="px-4 py-2">
@@ -192,9 +227,21 @@ export function ExportMenu({
               onClick={async () => {
                 onClose();
                 try {
-                  await exportarXLSXGrupo(cursoData, evalActiva, grupo.numero);
+                  const ok = await exportarXLSXGrupo(
+                    cursoData,
+                    evalActiva,
+                    grupo.numero,
+                  );
+                  if (ok)
+                    await message("¡Excel exportado con éxito!", {
+                      title: "Exportación exitosa",
+                      kind: "info",
+                    });
                 } catch (e) {
-                  alert("Error al exportar: " + String(e));
+                  await message("Error al exportar: " + String(e), {
+                    title: "Error",
+                    kind: "error",
+                  });
                 }
               }}
               className="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-gray-50 transition text-left"

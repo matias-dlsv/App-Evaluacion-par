@@ -12,6 +12,8 @@ import {
 import { procesarArchivoEvaluacion } from "../utils/helpers";
 import { useAppStore } from "../store/appStore";
 import { ExportMenu } from "./ExportMenu";
+import { exportarSeguimiento } from "../utils/exportarExcel";
+import { message } from "@tauri-apps/plugin-dialog";
 import { SeguimientoView } from "./SeguimientoView";
 import { GrupoCard } from "./GrupoCard";
 import { nuevoGrupo } from "../utils/helpers";
@@ -558,6 +560,7 @@ export function CursoView({
           </div>
 
           {/* Menú exportar */}
+          {/* Menú exportar */}
           <div className="relative">
             <button
               onClick={() => setMenuExportAbierto((v) => !v)}
@@ -578,14 +581,73 @@ export function CursoView({
                 />
               </svg>
             </button>
-            {menuExportAbierto && evalActiva && (
-              <ExportMenu
-                cursoData={cursoData}
-                evalActiva={evalActiva}
-                tieneAutoevaluaciones={tieneAutoevaluaciones}
-                onClose={() => setMenuExportAbierto(false)}
-              />
-            )}
+
+            {menuExportAbierto &&
+              (modoSeguimiento ? (
+                <>
+                  <div
+                    className="fixed inset-0 z-10"
+                    onClick={() => setMenuExportAbierto(false)}
+                  />
+                  <div
+                    className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-lg border z-20 overflow-hidden"
+                    style={{ borderColor: "var(--color-warm-gray)" }}
+                  >
+                    <button
+                      onClick={async () => {
+                        setMenuExportAbierto(false);
+                        try {
+                          const ok = await exportarSeguimiento(cursoData);
+                          if (ok)
+                            await message("¡Seguimiento exportado con éxito!", {
+                              title: "Exportación exitosa",
+                              kind: "info",
+                            });
+                        } catch (e) {
+                          await message("Error al exportar: " + String(e), {
+                            title: "Error",
+                            kind: "error",
+                          });
+                        }
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-sm hover:bg-gray-50 transition text-left"
+                      style={{ color: "var(--color-navy)" }}
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 16 16"
+                        fill="currentColor"
+                        className="w-4 h-4 shrink-0"
+                        style={{ color: "var(--color-blue-dark)" }}
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M15 8A7 7 0 1 1 1 8a7 7 0 0 1 14 0ZM9.5 5.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm-.5 3a3.5 3.5 0 0 0-2.986 1.691A5.476 5.476 0 0 0 8 13.5a5.476 5.476 0 0 0 1.986-.309A3.5 3.5 0 0 0 9 8.5Z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                      <div>
+                        <p className="font-semibold">Excel seguimiento</p>
+                        <p
+                          className="text-[11px]"
+                          style={{ color: "var(--color-blue-light)" }}
+                        >
+                          Tendencia longitudinal por alumno
+                        </p>
+                      </div>
+                    </button>
+                  </div>
+                </>
+              ) : (
+                evalActiva && (
+                  <ExportMenu
+                    cursoData={cursoData}
+                    evalActiva={evalActiva}
+                    tieneAutoevaluaciones={tieneAutoevaluaciones}
+                    onClose={() => setMenuExportAbierto(false)}
+                  />
+                )
+              ))}
           </div>
         </div>
 
