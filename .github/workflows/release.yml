@@ -18,7 +18,7 @@ jobs:
             args: "--target aarch64-apple-darwin"
             rust-target: aarch64-apple-darwin
 
-          - platform: macos-13        # Intel (pre-2020)
+          - platform: macos-latest    # Intel (cross-compilado desde Apple Silicon)
             args: "--target x86_64-apple-darwin"
             rust-target: x86_64-apple-darwin
 
@@ -48,7 +48,7 @@ jobs:
       - name: Instalar Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.rust-target }}   # ✅ Simple y directo, sin condicionales
+          targets: ${{ matrix.rust-target }}
 
       - name: Cachear Rust para que compile más rápido
         uses: swatinem/rust-cache@v2
@@ -76,7 +76,7 @@ jobs:
             | 🐧 Linux | `EquiPar___VERSION___amd64.AppImage` |
 
             > ❓ **¿No sabes qué Mac tienes?** Menú Apple 🍎 → **Acerca de esta Mac** → si dice "Chip Apple M…" descarga Silicon, si dice "Procesador Intel" descarga Intel.
-            > 
+            >
             > **Linux avanzado**: también disponibles `.deb` y `.rpm` más abajo.
           releaseDraft: true
           prerelease: false
