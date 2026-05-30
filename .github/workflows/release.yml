@@ -1,4 +1,5 @@
 name: Release
+
 on:
   push:
     tags:
@@ -13,16 +14,24 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: macos-latest       # Apple Silicon (M1/M2/M3)
+          - platform: macos-latest    # Apple Silicon (M1/M2/M3/M4)
             args: "--target aarch64-apple-darwin"
-          - platform: macos-13           # Intel (pre-2020)
+            rust-target: aarch64-apple-darwin
+
+          - platform: macos-13        # Intel (pre-2020)
             args: "--target x86_64-apple-darwin"
+            rust-target: x86_64-apple-darwin
+
           - platform: ubuntu-22.04
             args: ""
+            rust-target: ""
+
           - platform: windows-latest
             args: ""
+            rust-target: ""
 
     runs-on: ${{ matrix.platform }}
+
     steps:
       - name: Checkout del código
         uses: actions/checkout@v4
@@ -39,7 +48,7 @@ jobs:
       - name: Instalar Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin' || matrix.platform == 'macos-13' && 'x86_64-apple-darwin' || '' }}
+          targets: ${{ matrix.rust-target }}   # ✅ Simple y directo, sin condicionales
 
       - name: Cachear Rust para que compile más rápido
         uses: swatinem/rust-cache@v2
@@ -62,10 +71,12 @@ jobs:
             | Sistema | Archivo |
             |---------|---------|
             | 🪟 Windows | `EquiPar___VERSION___x64-setup.exe` |
-            | 🍎 Mac Apple Silicon (M1/M2/M3) | `EquiPar___VERSION___aarch64.dmg` |
+            | 🍎 Mac Apple Silicon (M1/M2/M3/M4) | `EquiPar___VERSION___aarch64.dmg` |
             | 🍎 Mac Intel (pre-2020) | `EquiPar___VERSION___x64.dmg` |
             | 🐧 Linux | `EquiPar___VERSION___amd64.AppImage` |
 
+            > ❓ **¿No sabes qué Mac tienes?** Menú Apple 🍎 → **Acerca de esta Mac** → si dice "Chip Apple M…" descarga Silicon, si dice "Procesador Intel" descarga Intel.
+            > 
             > **Linux avanzado**: también disponibles `.deb` y `.rpm` más abajo.
           releaseDraft: true
           prerelease: false
