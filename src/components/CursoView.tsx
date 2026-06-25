@@ -32,12 +32,18 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { useTourCurso } from "../hooks/useTour";
+import { SimpleTour } from "./SimpleTour";
+import { tourStepsCurso } from "../config/tourSteps";
 
 interface CursoViewProps {
   cursoActivo: Curso;
   onVolver: () => void;
   guardarEnStore: (lista: Curso[]) => void;
+  tourDesdeCreacion?: boolean;
+  onTourFinish?: () => void;
 }
+
 function SortableTab({
   ev,
   isActive,
@@ -241,12 +247,14 @@ function SortableTab({
     </div>
   );
 }
+
 export function CursoView({
   cursoActivo,
   onVolver,
   guardarEnStore,
 }: CursoViewProps) {
   const { cursos, actualizarCurso } = useAppStore();
+  const { tourEnabled, completarTour, reiniciarTour } = useTourCurso();
 
   const [evalActivaId, setEvalActivaId] = useState<string>(() => {
     return cursoActivo.evaluaciones[0]?.id ?? "";
@@ -271,7 +279,6 @@ export function CursoView({
   const [renombrandoId, setRenombrandoId] = useState<string | null>(null);
   const [nuevoNombre, setNuevoNombre] = useState("");
 
-  // Siempre leemos el curso fresco del store
   const cursoData = cursos.find((c) => c.id === cursoActivo.id) ?? cursoActivo;
   const modoSeguimiento = evalActivaId === "seguimiento";
   const menuRef = useRef<HTMLDivElement>(null);
@@ -286,6 +293,7 @@ export function CursoView({
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [menuEvalAbierto]);
+
   const evalActiva: Evaluacion | null = modoSeguimiento
     ? null
     : (cursoData.evaluaciones.find((e) => e.id === evalActivaId) ??
@@ -326,11 +334,16 @@ export function CursoView({
   const gruposFiltrados = evalActiva
     ? busqueda.trim() === ""
       ? evalActiva.grupos
-      : evalActiva.grupos.filter((g) =>
-          g.estudiantes.some((e) =>
-            e.identificacion.toLowerCase().includes(busqueda.toLowerCase()),
-          ),
-        )
+      : evalActiva.grupos.filter((g) => {
+          const q = busqueda.toLowerCase().trim();
+          const matchGrupo =
+            g.numero.toLowerCase().includes(q) ||
+            `grupo ${g.numero}`.toLowerCase().includes(q);
+          const matchEstudiante = g.estudiantes.some((e) =>
+            e.identificacion.toLowerCase().includes(q),
+          );
+          return matchGrupo || matchEstudiante;
+        })
     : [];
 
   const allExpanded = evalActiva
@@ -459,6 +472,7 @@ export function CursoView({
       alert(`Error al agregar evaluación: ${error}`);
     }
   };
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 5 },
@@ -510,8 +524,16 @@ export function CursoView({
     });
     setRenombrandoId(null);
   };
+
   return (
     <div className="min-h-screen p-8" style={{ backgroundColor: "#F7F5F3" }}>
+      {/* Tour de la vista de curso */}
+      <SimpleTour
+        steps={tourStepsCurso}
+        run={tourEnabled}
+        onFinish={completarTour}
+      />
+
       <div className="w-full">
         {/* Breadcrumb */}
         <div className="flex items-center gap-3 mb-6">
@@ -553,190 +575,248 @@ export function CursoView({
               {cursoData.nombre}
             </h1>
             <p className="mt-1" style={{ color: "#FFAAAA" }}>
-              {evalActiva ? `${evalActiva.grupos.length} grupos` : "0 grupos"} ·{" "}
-              {cursoData.evaluaciones.length} evaluación
+              {modoSeguimiento
+                ? (() => {
+                    const totalAlumnos = new Set(
+                      cursoData.evaluaciones.flatMap((ev) =>
+                        ev.grupos.flatMap((g) =>
+                          g.estudiantes.map((e) => e.identificacion),
+                        ),
+                      ),
+                    ).size;
+                    return `${totalAlumnos} alumno${totalAlumnos !== 1 ? "s" : ""}`;
+                  })()
+                : `${evalActiva?.grupos.length ?? 0} grupo${(evalActiva?.grupos.length ?? 0) !== 1 ? "s" : ""}`}{" "}
+              · {cursoData.evaluaciones.length} evaluación
               {cursoData.evaluaciones.length !== 1 ? "es" : ""}
             </p>
           </div>
 
-          {/* Menú exportar */}
-          {/* Menú exportar */}
-          <div className="relative">
+          <div className="flex items-center gap-3">
             <button
-              onClick={() => setMenuExportAbierto((v) => !v)}
-              className="px-5 py-3 bg-white font-semibold rounded shadow transition cursor-pointer border border-white flex items-center gap-2"
-              style={{ color: "var(--color-primary)" }}
+              onClick={() => {
+                // Si estamos en seguimiento, volver a la primera evaluación antes de iniciar el tour
+                if (modoSeguimiento && cursoData.evaluaciones.length > 0) {
+                  setEvalActivaId(cursoData.evaluaciones[0].id);
+                }
+                // Pequeño delay para que el DOM se actualice antes de que el tour busque los elementos
+                setTimeout(reiniciarTour, 50);
+              }}
+              title="Ver guía de uso"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition cursor-pointer border"
+              style={{
+                color: "white",
+                borderColor: "rgba(255,255,255,0.4)",
+                backgroundColor: "rgba(255,255,255,0.12)",
+              }}
+              onMouseOver={(e) =>
+                (e.currentTarget.style.backgroundColor =
+                  "rgba(255,255,255,0.22)")
+              }
+              onMouseOut={(e) =>
+                (e.currentTarget.style.backgroundColor =
+                  "rgba(255,255,255,0.12)")
+              }
             >
-              Exportar
               <svg
                 xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 16 16"
-                fill="currentColor"
-                className="w-4 h-4"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
               >
                 <path
-                  fillRule="evenodd"
-                  d="M4.22 6.22a.75.75 0 0 1 1.06 0L8 8.94l2.72-2.72a.75.75 0 1 1 1.06 1.06l-3.25 3.25a.75.75 0 0 1-1.06 0L4.22 7.28a.75.75 0 0 1 0-1.06Z"
-                  clipRule="evenodd"
+                  fill="currentColor"
+                  d="M11.95 18q.525 0 .888-.363t.362-.887t-.362-.888t-.888-.362t-.887.363t-.363.887t.363.888t.887.362m-.9-3.85h1.85q0-.825.188-1.3t1.062-1.3q.65-.65 1.025-1.238T15.55 8.9q0-1.4-1.025-2.15T12.1 6q-1.425 0-2.312.75T8.55 8.55l1.65.65q.125-.45.563-.975T12.1 7.7q.8 0 1.2.438t.4.962q0 .5-.3.938t-.75.812q-1.1.975-1.35 1.475t-.25 1.825M12 22q-2.075 0-3.9-.787t-3.175-2.138T2.788 15.9T2 12t.788-3.9t2.137-3.175T8.1 2.788T12 2t3.9.788t3.175 2.137T21.213 8.1T22 12t-.788 3.9t-2.137 3.175t-3.175 2.138T12 22m0-2q3.35 0 5.675-2.325T20 12t-2.325-5.675T12 4T6.325 6.325T4 12t2.325 5.675T12 20m0-8"
                 />
               </svg>
+              Ayuda
             </button>
 
-            {menuExportAbierto &&
-              (modoSeguimiento ? (
-                <>
-                  <div
-                    className="fixed inset-0 z-10"
-                    onClick={() => setMenuExportAbierto(false)}
-                  />
-                  <div
-                    className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-lg border z-20 overflow-hidden"
-                    style={{ borderColor: "var(--color-warm-gray)" }}
-                  >
-                    <button
-                      onClick={async () => {
-                        setMenuExportAbierto(false);
-                        try {
-                          const ok = await exportarSeguimiento(cursoData);
-                          if (ok)
-                            await message("¡Seguimiento exportado con éxito!", {
-                              title: "Exportación exitosa",
-                              kind: "info",
-                            });
-                        } catch (e) {
-                          await message("Error al exportar: " + String(e), {
-                            title: "Error",
-                            kind: "error",
-                          });
-                        }
-                      }}
-                      className="w-full flex items-center gap-3 px-4 py-3 text-sm hover:bg-gray-50 transition text-left"
-                      style={{ color: "var(--color-navy)" }}
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 16 16"
-                        fill="currentColor"
-                        className="w-4 h-4 shrink-0"
-                        style={{ color: "var(--color-blue-dark)" }}
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M15 8A7 7 0 1 1 1 8a7 7 0 0 1 14 0ZM9.5 5.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm-.5 3a3.5 3.5 0 0 0-2.986 1.691A5.476 5.476 0 0 0 8 13.5a5.476 5.476 0 0 0 1.986-.309A3.5 3.5 0 0 0 9 8.5Z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                      <div>
-                        <p className="font-semibold">Excel seguimiento</p>
-                        <p
-                          className="text-[11px]"
-                          style={{ color: "var(--color-blue-light)" }}
-                        >
-                          Tendencia longitudinal por alumno
-                        </p>
-                      </div>
-                    </button>
-                  </div>
-                </>
-              ) : (
-                evalActiva && (
-                  <ExportMenu
-                    cursoData={cursoData}
-                    evalActiva={evalActiva}
-                    tieneAutoevaluaciones={tieneAutoevaluaciones}
-                    onClose={() => setMenuExportAbierto(false)}
-                  />
-                )
-              ))}
-          </div>
-        </div>
-
-        {/* Tabs de evaluaciones */}
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={reordenarEvaluaciones}
-        >
-          <SortableContext
-            items={cursoData.evaluaciones.map((ev) => ev.id)}
-            strategy={horizontalListSortingStrategy}
-          >
-            <div className="flex items-center gap-2 mb-6 flex-wrap">
-              {cursoData.evaluaciones.map((ev) => (
-                <SortableTab
-                  key={ev.id}
-                  ev={ev}
-                  isActive={evalActivaId === ev.id && !modoSeguimiento}
-                  menuAbierto={menuEvalAbierto}
-                  onSelect={() => setEvalActivaId(ev.id)}
-                  onToggleMenu={() => setMenuEvalAbierto((v) => !v)}
-                  onRenombrar={() => renombrarEvaluacion(ev.id)}
-                  onEliminar={() => eliminarEvaluacion(ev.id)}
-                  renombrandoId={renombrandoId}
-                  nuevoNombre={nuevoNombre}
-                  onChangeNombre={setNuevoNombre}
-                  onConfirmarRenombre={confirmarRenombre}
-                  onCancelarRenombre={() => setRenombrandoId(null)}
-                />
-              ))}
-
-              {/* + Agregar evaluación */}
+            {/* Menú exportar */}
+            <div className="relative">
               <button
-                onClick={agregarEvaluacion}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold border-2 border-dashed transition cursor-pointer"
-                style={{
-                  color: "var(--color-primary)",
-                  borderColor: "var(--color-primary)",
-                  backgroundColor: "#FFF5F5",
-                }}
+                data-tour="tour-btn-exportar"
+                onClick={() => setMenuExportAbierto((v) => !v)}
+                className="px-5 py-3 bg-white font-semibold rounded shadow transition cursor-pointer border border-white flex items-center gap-2"
+                style={{ color: "var(--color-primary)" }}
               >
+                Exportar
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   viewBox="0 0 16 16"
                   fill="currentColor"
-                  className="w-3.5 h-3.5"
+                  className="w-4 h-4"
                 >
-                  <path d="M8.75 3.75a.75.75 0 0 0-1.5 0v3.5h-3.5a.75.75 0 0 0 0 1.5h3.5v3.5a.75.75 0 0 0 1.5 0v-3.5h3.5a.75.75 0 0 0 0-1.5h-3.5v-3.5Z" />
+                  <path
+                    fillRule="evenodd"
+                    d="M4.22 6.22a.75.75 0 0 1 1.06 0L8 8.94l2.72-2.72a.75.75 0 1 1 1.06 1.06l-3.25 3.25a.75.75 0 0 1-1.06 0L4.22 7.28a.75.75 0 0 1 0-1.06Z"
+                    clipRule="evenodd"
+                  />
                 </svg>
-                Agregar evaluación
               </button>
 
-              {/* Tab Seguimiento */}
-              {cursoData.evaluaciones.length >= 2 && (
+              {menuExportAbierto &&
+                (modoSeguimiento ? (
+                  <>
+                    <div
+                      className="fixed inset-0 z-10"
+                      onClick={() => setMenuExportAbierto(false)}
+                    />
+                    <div
+                      className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-lg border z-20 overflow-hidden"
+                      style={{ borderColor: "var(--color-warm-gray)" }}
+                    >
+                      <button
+                        onClick={async () => {
+                          setMenuExportAbierto(false);
+                          try {
+                            const ok = await exportarSeguimiento(cursoData);
+                            if (ok)
+                              await message(
+                                "¡Seguimiento exportado con éxito!",
+                                {
+                                  title: "Exportación exitosa",
+                                  kind: "info",
+                                },
+                              );
+                          } catch (e) {
+                            await message("Error al exportar: " + String(e), {
+                              title: "Error",
+                              kind: "error",
+                            });
+                          }
+                        }}
+                        className="w-full flex items-center gap-3 px-4 py-3 text-sm hover:bg-gray-50 transition text-left"
+                        style={{ color: "var(--color-navy)" }}
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 16 16"
+                          fill="currentColor"
+                          className="w-4 h-4 shrink-0"
+                          style={{ color: "var(--color-blue-dark)" }}
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M15 8A7 7 0 1 1 1 8a7 7 0 0 1 14 0ZM9.5 5.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm-.5 3a3.5 3.5 0 0 0-2.986 1.691A5.476 5.476 0 0 0 8 13.5a5.476 5.476 0 0 0 1.986-.309A3.5 3.5 0 0 0 9 8.5Z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                        <div>
+                          <p className="font-semibold">Excel seguimiento</p>
+                          <p
+                            className="text-[11px]"
+                            style={{ color: "var(--color-blue-light)" }}
+                          >
+                            Tendencia longitudinal por alumno
+                          </p>
+                        </div>
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  evalActiva && (
+                    <ExportMenu
+                      cursoData={cursoData}
+                      evalActiva={evalActiva}
+                      tieneAutoevaluaciones={tieneAutoevaluaciones}
+                      onClose={() => setMenuExportAbierto(false)}
+                    />
+                  )
+                ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Tabs de evaluaciones — data-tour aquí */}
+        <div data-tour="tour-tabs-evaluaciones">
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={reordenarEvaluaciones}
+          >
+            <SortableContext
+              items={cursoData.evaluaciones.map((ev) => ev.id)}
+              strategy={horizontalListSortingStrategy}
+            >
+              <div className="flex items-center gap-2 mb-6 flex-wrap">
+                {cursoData.evaluaciones.map((ev) => (
+                  <SortableTab
+                    key={ev.id}
+                    ev={ev}
+                    isActive={evalActivaId === ev.id && !modoSeguimiento}
+                    menuAbierto={menuEvalAbierto}
+                    onSelect={() => setEvalActivaId(ev.id)}
+                    onToggleMenu={() => setMenuEvalAbierto((v) => !v)}
+                    onRenombrar={() => renombrarEvaluacion(ev.id)}
+                    onEliminar={() => eliminarEvaluacion(ev.id)}
+                    renombrandoId={renombrandoId}
+                    nuevoNombre={nuevoNombre}
+                    onChangeNombre={setNuevoNombre}
+                    onConfirmarRenombre={confirmarRenombre}
+                    onCancelarRenombre={() => setRenombrandoId(null)}
+                  />
+                ))}
+
+                {/* + Agregar evaluación */}
                 <button
-                  onClick={() => {
-                    setEvalActivaId("seguimiento");
-                    setMenuEvalAbierto(false);
+                  onClick={agregarEvaluacion}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold border-2 border-dashed transition cursor-pointer"
+                  style={{
+                    color: "var(--color-primary)",
+                    borderColor: "var(--color-primary)",
+                    backgroundColor: "#FFF5F5",
                   }}
-                  className="ml-2 px-4 py-2 rounded-lg text-sm font-semibold transition border cursor-pointer flex items-center gap-1.5"
-                  style={
-                    modoSeguimiento
-                      ? {
-                          backgroundColor: "var(--color-blue-mid)",
-                          color: "white",
-                          borderColor: "var(--color-blue-mid)",
-                        }
-                      : {
-                          backgroundColor: "white",
-                          color: "var(--color-blue-mid)",
-                          borderColor: "var(--color-blue-light)",
-                        }
-                  }
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     viewBox="0 0 16 16"
                     fill="currentColor"
-                    className="w-4 h-4"
+                    className="w-3.5 h-3.5"
                   >
-                    <path d="M1.5 2A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h13a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 14.5 2h-13ZM11 8a1 1 0 1 1 2 0 1 1 0 0 1-2 0Zm1 3a1 1 0 1 1 0 2 1 1 0 0 1 0-2ZM3 9a1 1 0 1 1 2 0 1 1 0 0 1-2 0Zm1 3a1 1 0 1 1 0 2 1 1 0 0 1 0-2Zm3-3a1 1 0 1 1 2 0 1 1 0 0 1-2 0Zm1 3a1 1 0 1 1 0 2 1 1 0 0 1 0-2Z" />
+                    <path d="M8.75 3.75a.75.75 0 0 0-1.5 0v3.5h-3.5a.75.75 0 0 0 0 1.5h3.5v3.5a.75.75 0 0 0 1.5 0v-3.5h3.5a.75.75 0 0 0 0-1.5h-3.5v-3.5Z" />
                   </svg>
-                  Seguimiento
+                  Agregar evaluación
                 </button>
-              )}
-            </div>
-          </SortableContext>
-        </DndContext>
+
+                {/* Tab Seguimiento */}
+                {cursoData.evaluaciones.length >= 2 && (
+                  <button
+                    data-tour="tour-seguimiento"
+                    onClick={() => {
+                      setEvalActivaId("seguimiento");
+                      setMenuEvalAbierto(false);
+                    }}
+                    className="ml-2 px-4 py-2 rounded-lg text-sm font-semibold transition border cursor-pointer flex items-center gap-1.5"
+                    style={
+                      modoSeguimiento
+                        ? {
+                            backgroundColor: "var(--color-blue-mid)",
+                            color: "white",
+                            borderColor: "var(--color-blue-mid)",
+                          }
+                        : {
+                            backgroundColor: "white",
+                            color: "var(--color-blue-mid)",
+                            borderColor: "var(--color-blue-light)",
+                          }
+                    }
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 16 16"
+                      fill="currentColor"
+                      className="w-4 h-4"
+                    >
+                      <path d="M1.5 2A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h13a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 14.5 2h-13ZM11 8a1 1 0 1 1 2 0 1 1 0 0 1-2 0Zm1 3a1 1 0 1 1 0 2 1 1 0 0 1 0-2ZM3 9a1 1 0 1 1 2 0 1 1 0 0 1-2 0Zm1 3a1 1 0 1 1 0 2 1 1 0 0 1 0-2Zm3-3a1 1 0 1 1 2 0 1 1 0 0 1-2 0Zm1 3a1 1 0 1 1 0 2 1 1 0 0 1 0-2Z" />
+                    </svg>
+                    Seguimiento
+                  </button>
+                )}
+              </div>
+            </SortableContext>
+          </DndContext>
+        </div>
 
         {/* Advertencia duplicados */}
         {!modoSeguimiento && estudiantesDuplicados.size > 0 && (
@@ -767,8 +847,9 @@ export function CursoView({
         ) : (
           /* ─── Modo normal ───────────────────────────────────────────────── */
           <>
-            {/* Configuración de castigos */}
+            {/* Configuración de castigos — data-tour aquí */}
             <div
+              data-tour="tour-config-castigos"
               className="bg-white p-6 rounded-xl shadow-sm border mb-6"
               style={{ borderColor: "var(--color-warm-gray)" }}
             >
@@ -799,7 +880,7 @@ export function CursoView({
                   >
                     Máx. castigo por evaluar fuera del grupo
                   </label>
-                  <div className="relative flex items-center">
+                  <div className="flex items-center gap-1">
                     <input
                       type="number"
                       step="1"
@@ -822,7 +903,7 @@ export function CursoView({
                       style={{ borderColor: "var(--color-warm-gray)" }}
                     />
                     <span
-                      className="absolute right-2 text-xs font-bold pointer-events-none"
+                      className="text-xs font-bold"
                       style={{ color: "var(--color-primary-mid)" }}
                     >
                       %
@@ -842,7 +923,7 @@ export function CursoView({
                   >
                     Máx. castigo por no evaluar compañeros
                   </label>
-                  <div className="relative flex items-center">
+                  <div className="flex items-center gap-1">
                     <input
                       type="number"
                       step="1"
@@ -865,7 +946,7 @@ export function CursoView({
                       style={{ borderColor: "var(--color-warm-gray)" }}
                     />
                     <span
-                      className="absolute right-2 text-xs font-bold pointer-events-none"
+                      className="text-xs font-bold"
                       style={{ color: "var(--color-primary-warm)" }}
                     >
                       %
@@ -941,7 +1022,10 @@ export function CursoView({
                     Nuevo grupo
                   </button>
                 </div>
+
+                {/* Botón calcular — data-tour aquí */}
                 <button
+                  data-tour="tour-btn-calcular"
                   onClick={aplicarNotasBrutas}
                   className="px-5 py-2 text-white font-semibold rounded-lg transition cursor-pointer text-sm shadow"
                   style={{ backgroundColor: "var(--color-primary)" }}
@@ -977,7 +1061,7 @@ export function CursoView({
                   type="text"
                   value={busqueda}
                   onChange={(e) => setBusqueda(e.target.value)}
-                  placeholder="Buscar por integrante..."
+                  placeholder="Buscar por integrante o grupo..."
                   className="w-full pl-9 pr-10 py-2 bg-white border rounded-lg text-sm outline-none shadow-sm"
                   style={{
                     borderColor: "var(--color-warm-gray)",

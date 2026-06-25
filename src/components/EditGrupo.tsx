@@ -59,13 +59,13 @@ export function EditGrupo({ grupo, onSave, onCancel }: EditGrupoProps) {
 
   return (
     <div
-      className="flex flex-col gap-4 p-4 border-t"
+      className="flex flex-col gap-6 p-6 border-t"
       style={{ backgroundColor: "#FFF5F5", borderColor: "#D6D1CA" }}
     >
       <div className="flex items-end gap-4">
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1.5">
           <label
-            className="text-[10px] font-bold uppercase"
+            className="text-xs font-bold uppercase"
             style={{ color: "var(--color-blue-mid)" }}
           >
             Nota bruta del grupo
@@ -77,7 +77,7 @@ export function EditGrupo({ grupo, onSave, onCancel }: EditGrupoProps) {
             max="7"
             value={draft.promedio_bruto ?? ""}
             onChange={(e) => setPromedio(e.target.value)}
-            className="w-24 p-1.5 border rounded text-sm text-center outline-none bg-white"
+            className="w-28 p-2 border rounded text-sm text-center outline-none bg-white"
             style={{ borderColor: "var(--color-warm-gray)" }}
             onFocus={(e) =>
               (e.target.style.boxShadow = "0 0 0 2px var(--color-primary)")
@@ -88,24 +88,24 @@ export function EditGrupo({ grupo, onSave, onCancel }: EditGrupoProps) {
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-xs border-collapse">
+        <table className="w-full text-sm border-collapse">
           <thead>
             <tr
-              className="uppercase text-[10px] border-b-2 bg-white"
+              className="uppercase text-xs border-b-2 bg-white"
               style={{
                 color: "var(--color-blue-mid)",
                 borderColor: "var(--color-warm-gray)",
               }}
             >
-              <th className="text-left py-2 pr-3 font-semibold">Alumno</th>
-              <th className="text-center py-2 px-2 font-semibold whitespace-nowrap">
+              <th className="text-left py-3 pr-3 font-semibold">Alumno</th>
+              <th className="text-center py-3 px-2 font-semibold whitespace-nowrap">
                 Nota Bruta
               </th>
-              <th className="text-center py-2 px-2 font-semibold whitespace-nowrap">
+              <th className="text-center py-3 px-2 font-semibold whitespace-nowrap">
                 Ev. Par
               </th>
               <th
-                className="text-center py-2 px-2 font-semibold whitespace-nowrap"
+                className="text-center py-3 px-2 font-semibold whitespace-nowrap"
                 style={{ color: "var(--color-blue-light)" }}
               >
                 Auto
@@ -113,7 +113,7 @@ export function EditGrupo({ grupo, onSave, onCancel }: EditGrupoProps) {
                 Eval.
               </th>
               <th
-                className="text-center py-2 px-2 font-semibold whitespace-nowrap"
+                className="text-center py-3 px-2 font-semibold whitespace-nowrap"
                 style={{ color: "var(--color-primary-warm)" }}
               >
                 Desc.
@@ -121,7 +121,7 @@ export function EditGrupo({ grupo, onSave, onCancel }: EditGrupoProps) {
                 No Evaluó (%)
               </th>
               <th
-                className="text-center py-2 px-2 font-semibold whitespace-nowrap"
+                className="text-center py-3 px-2 font-semibold whitespace-nowrap"
                 style={{ color: "var(--color-primary-mid)" }}
               >
                 Desc.
@@ -129,12 +129,12 @@ export function EditGrupo({ grupo, onSave, onCancel }: EditGrupoProps) {
                 Grupo Ajeno (%)
               </th>
               <th
-                className="text-center py-2 px-2 font-semibold whitespace-nowrap"
+                className="text-center py-3 px-2 font-semibold whitespace-nowrap"
                 style={{ color: "var(--color-primary)" }}
               >
                 Nota Final
               </th>
-              <th className="py-2 w-6" />
+              <th className="py-3 w-6" />
             </tr>
           </thead>
           <tbody>
@@ -144,20 +144,20 @@ export function EditGrupo({ grupo, onSave, onCancel }: EditGrupoProps) {
                 className="border-b last:border-0"
                 style={{ borderColor: "#F3F0ED" }}
               >
-                <td className="py-1.5 pr-3">
+                <td className="py-2 pr-3">
                   <input
                     value={est.identificacion}
                     onChange={(e) =>
                       setEst(idx, "identificacion", e.target.value)
                     }
                     placeholder="Nombre o ID"
-                    className="w-full p-1 border rounded text-xs outline-none bg-white min-w-[120px]"
+                    className="w-full p-1.5 border rounded text-sm outline-none bg-white min-w-[140px]"
                     style={{ borderColor: "var(--color-warm-gray)" }}
                   />
                 </td>
-                <td className="py-1.5 px-2 text-center">
+                <td className="py-2 px-2 text-center">
                   <span
-                    className="text-xs font-semibold px-2 py-1 rounded"
+                    className="text-sm font-semibold px-2 py-1 rounded"
                     style={{
                       color: "var(--color-blue-mid)",
                       backgroundColor: "#F3F0ED",
@@ -166,7 +166,7 @@ export function EditGrupo({ grupo, onSave, onCancel }: EditGrupoProps) {
                     {draft.promedio_bruto ?? "—"}
                   </span>
                 </td>
-                <td className="py-1.5 px-2">
+                <td className="py-2 px-2">
                   <input
                     type="number"
                     step="0.01"
@@ -175,14 +175,14 @@ export function EditGrupo({ grupo, onSave, onCancel }: EditGrupoProps) {
                     value={est.notaPar ?? ""}
                     onChange={(e) => setEst(idx, "notaPar", e.target.value)}
                     placeholder="—"
-                    className="w-14 p-1 border rounded text-xs text-center outline-none bg-white block mx-auto"
+                    className="w-16 p-1.5 border rounded text-sm text-center outline-none bg-white block mx-auto"
                     style={{ borderColor: "var(--color-warm-gray)" }}
                   />
                 </td>
-                <td className="py-1.5 px-2 text-center">
+                <td className="py-2 px-2 text-center">
                   {est.notaAuto !== undefined ? (
                     <span
-                      className="text-xs font-semibold px-2 py-1 rounded border"
+                      className="text-sm font-semibold px-2 py-1 rounded border"
                       style={{
                         color: "var(--color-blue-dark)",
                         backgroundColor: "#EEF2F5",
@@ -193,15 +193,15 @@ export function EditGrupo({ grupo, onSave, onCancel }: EditGrupoProps) {
                     </span>
                   ) : (
                     <span
-                      className="text-xs"
+                      className="text-sm"
                       style={{ color: "var(--color-warm-gray)" }}
                     >
                       —
                     </span>
                   )}
                 </td>
-                <td className="py-1.5 px-2">
-                  <div className="relative flex items-center">
+                <td className="py-2 px-2">
+                  <div className="flex items-center gap-1">
                     <input
                       type="number"
                       step="1"
@@ -216,19 +216,19 @@ export function EditGrupo({ grupo, onSave, onCancel }: EditGrupoProps) {
                         setEst(idx, "factorCastigoNoEvaluo", e.target.value)
                       }
                       placeholder="0"
-                      className="w-16 p-1 border rounded text-xs text-center outline-none bg-white block mx-auto pr-5"
+                      className="w-20 p-1.5 border rounded text-sm text-center outline-none bg-white block mx-auto"
                       style={{ borderColor: "#CA3625" }}
                     />
                     <span
-                      className="absolute right-1.5 text-[10px] font-bold pointer-events-none"
+                      className="text-xs font-bold"
                       style={{ color: "#CA3625" }}
                     >
                       %
                     </span>
                   </div>
                 </td>
-                <td className="py-1.5 px-2">
-                  <div className="relative flex items-center">
+                <td className="py-2 px-2">
+                  <div className="flex items-center gap-1">
                     <input
                       type="number"
                       step="1"
@@ -243,35 +243,35 @@ export function EditGrupo({ grupo, onSave, onCancel }: EditGrupoProps) {
                         setEst(idx, "factorCastigoFueraGrupo", e.target.value)
                       }
                       placeholder="0"
-                      className="w-16 p-1 border rounded text-xs text-center outline-none bg-white block mx-auto pr-5"
+                      className="w-20 p-1.5 border rounded text-sm text-center outline-none bg-white block mx-auto"
                       style={{ borderColor: "var(--color-primary-mid)" }}
                     />
                     <span
-                      className="absolute right-1.5 text-[10px] font-bold pointer-events-none"
+                      className="text-xs font-bold"
                       style={{ color: "var(--color-primary-mid)" }}
                     >
                       %
                     </span>
                   </div>
                 </td>
-                <td className="py-1.5 px-2 text-center">
+                <td className="py-2 px-2 text-center">
                   {est.notaConDescuento !== undefined ? (
                     <span
-                      className="text-xs font-bold text-white px-2 py-1 rounded"
+                      className="text-sm font-bold text-white px-2.5 py-1 rounded"
                       style={{ backgroundColor: "var(--color-primary)" }}
                     >
                       {est.notaConDescuento}
                     </span>
                   ) : (
                     <span
-                      className="text-xs italic"
+                      className="text-sm italic"
                       style={{ color: "var(--color-warm-gray)" }}
                     >
                       —
                     </span>
                   )}
                 </td>
-                <td className="py-1.5 pl-1">
+                <td className="py-2 pl-1">
                   <BtnEliminar
                     onClick={() => removeEst(idx)}
                     title="Eliminar estudiante"
@@ -285,14 +285,14 @@ export function EditGrupo({ grupo, onSave, onCancel }: EditGrupoProps) {
 
       <button
         onClick={addEst}
-        className="self-start flex items-center gap-1.5 text-xs font-semibold hover:underline cursor-pointer"
+        className="self-start flex items-center gap-2 text-sm font-semibold hover:underline cursor-pointer"
         style={{ color: "var(--color-primary)" }}
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
           viewBox="0 0 16 16"
           fill="currentColor"
-          className="w-3.5 h-3.5"
+          className="w-4 h-4"
         >
           <path d="M8.75 3.75a.75.75 0 0 0-1.5 0v3.5h-3.5a.75.75 0 0 0 0 1.5h3.5v3.5a.75.75 0 0 0 1.5 0v-3.5h3.5a.75.75 0 0 0 0-1.5h-3.5v-3.5Z" />
         </svg>
@@ -300,12 +300,12 @@ export function EditGrupo({ grupo, onSave, onCancel }: EditGrupoProps) {
       </button>
 
       <div
-        className="flex gap-2 pt-2 border-t"
+        className="flex gap-3 pt-3 border-t"
         style={{ borderColor: "var(--color-warm-gray)" }}
       >
         <button
           onClick={() => onSave(draft)}
-          className="px-4 py-1.5 text-white text-xs font-bold rounded transition cursor-pointer"
+          className="px-6 py-2.5 text-white text-sm font-bold rounded transition cursor-pointer shadow"
           style={{ backgroundColor: "var(--color-primary)" }}
           onMouseOver={(e) =>
             ((e.target as HTMLElement).style.backgroundColor =
@@ -320,7 +320,7 @@ export function EditGrupo({ grupo, onSave, onCancel }: EditGrupoProps) {
         </button>
         <button
           onClick={onCancel}
-          className="px-4 py-1.5 bg-white text-xs font-semibold rounded border transition cursor-pointer"
+          className="px-6 py-2.5 bg-white text-sm font-semibold rounded border transition cursor-pointer"
           style={{
             color: "var(--color-blue-mid)",
             borderColor: "var(--color-warm-gray)",

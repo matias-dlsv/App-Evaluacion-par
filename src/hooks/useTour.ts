@@ -1,44 +1,45 @@
 // src/hooks/useTour.ts
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
-export const useTour = () => {
-  const [tourEnabled, setTourEnabled] = useState(() => {
-    // Verificar si ya completó el tour
-    return localStorage.getItem("equipar-tour-completed") !== "true";
-  });
+const TOUR_INICIO_KEY = "equipar_tour_inicio_done";
+const TOUR_CURSO_KEY = "equipar_tour_curso_done";
 
-  const [tourIndex, setTourIndex] = useState(0);
+export function useTourInicio() {
+  const [tourEnabled, setTourEnabled] = useState(false);
+
+  useEffect(() => {
+    const done = localStorage.getItem(TOUR_INICIO_KEY);
+    if (!done) setTourEnabled(true);
+  }, []);
 
   const completarTour = () => {
-    localStorage.setItem("equipar-tour-completed", "true");
+    localStorage.setItem(TOUR_INICIO_KEY, "1");
     setTourEnabled(false);
   };
 
-  const reiniciarTour = () => {
-    localStorage.removeItem("equipar-tour-completed");
-    setTourEnabled(true);
-    setTourIndex(0);
-  };
+  const reiniciarTour = () => setTourEnabled(true);
 
-  // Usamos 'any' aquí para saltarnos las discrepancias de versión de la librería
-  const handleTourCallback = (data: any) => {
-    if (!data) return;
-    
-    const { status, index } = data;
-    
-    if (status === "finished" || status === "skipped") {
-      completarTour();
-    } else {
-      setTourIndex(index);
+  return { tourEnabled, completarTour, reiniciarTour };
+}
+
+export function useTourCurso() {
+  const [tourEnabled, setTourEnabled] = useState(false);
+
+  useEffect(() => {
+    const done = localStorage.getItem(TOUR_CURSO_KEY);
+    if (!done) {
+      // Pequeño delay para que el DOM del CursoView esté montado
+      const t = setTimeout(() => setTourEnabled(true), 300);
+      return () => clearTimeout(t);
     }
+  }, []);
+
+  const completarTour = () => {
+    localStorage.setItem(TOUR_CURSO_KEY, "1");
+    setTourEnabled(false);
   };
 
-  return {
-    tourEnabled,
-    tourIndex,
-    setTourIndex,
-    handleTourCallback,
-    reiniciarTour,
-    completarTour,
-  };
-};
+  const reiniciarTour = () => setTourEnabled(true);
+
+  return { tourEnabled, completarTour, reiniciarTour };
+}

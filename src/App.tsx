@@ -2,17 +2,15 @@
 import { useState, useEffect, useRef } from "react";
 import { open, confirm } from "@tauri-apps/plugin-dialog";
 import { load } from "@tauri-apps/plugin-store";
-import { Joyride } from "react-joyride";
 import logoUandes from "./assets/logo-uandes.png";
 import "./App.css";
 import { Curso, Evaluacion, migrarCurso } from "./utils/notas";
 import { useAppStore } from "./store/appStore";
 import { procesarArchivoEvaluacion } from "./utils/helpers";
 import { CursoView } from "./components/CursoView";
-import { useTour } from "./hooks/useTour";
-import { tourSteps } from "./config/tourSteps";
-
-const JoyrideAny = Joyride as any;
+import { useTourInicio } from "./hooks/useTour";
+import { tourStepsInicio } from "./config/tourSteps";
+import { SimpleTour } from "./components/SimpleTour";
 
 function App() {
   const { cursos, agregarCurso, eliminarCurso, setCursos } = useAppStore();
@@ -22,8 +20,7 @@ function App() {
   const [evalActivaId] = useState<Record<string, string>>({});
   const storeRef = useRef<Awaited<ReturnType<typeof load>> | null>(null);
 
-  const { tourEnabled, tourIndex, handleTourCallback, reiniciarTour } =
-    useTour();
+  const { tourEnabled, completarTour, reiniciarTour } = useTourInicio();
 
   // ─── Store ──────────────────────────────────────────────────────────────────
 
@@ -105,54 +102,14 @@ function App() {
     );
   }
 
-  // ─── Vista principal (lista de cursos) ───────────────────────────────────────
+  // ─── Vista principal ─────────────────────────────────────────────────────────
 
   return (
     <>
-      <JoyrideAny
-        steps={tourSteps}
+      <SimpleTour
+        steps={tourStepsInicio}
         run={tourEnabled}
-        stepIndex={tourIndex}
-        callback={handleTourCallback}
-        continuous
-        showSkipButton
-        styles={{
-          primaryColor: "#ce0019",
-          textColor: "#333",
-          backgroundColor: "#fff",
-          overlayColor: "rgba(0, 0, 0, 0.5)",
-          borderRadius: 8,
-          tooltip: {
-            borderRadius: 8,
-            padding: 16,
-            boxShadow: "0 4px 12px rgba(206, 0, 25, 0.2)",
-          },
-          buttonNext: {
-            backgroundColor: "#ce0019",
-            color: "white",
-            borderRadius: 6,
-            padding: "8px 16px",
-            border: "none",
-            cursor: "pointer",
-            fontWeight: "600",
-          },
-          buttonBack: {
-            color: "#ce0019",
-            marginRight: "8px",
-            fontWeight: "600",
-          },
-          buttonSkip: {
-            color: "#ce0019",
-            fontWeight: "600",
-          },
-        }}
-        locale={{
-          back: "← Atrás",
-          close: "Cerrar",
-          last: "Finalizar",
-          next: "Siguiente →",
-          skip: "Saltar tour",
-        }}
+        onFinish={completarTour}
       />
 
       <div
@@ -227,8 +184,7 @@ function App() {
             )}
             <button
               onClick={reiniciarTour}
-              className="mt-4 px-4 py-2 bg-transparent font-medium rounded transition cursor-pointer text-white text-sm border border-white"
-              data-tour="btn-reiniciar-tour"
+              className="mt-4 self-start px-3 py-1.5 bg-transparent font-medium rounded transition cursor-pointer text-white text-sm border border-white flex items-center gap-1.5"
               onMouseOver={(e) =>
                 (e.currentTarget.style.backgroundColor =
                   "rgba(255,255,255,0.1)")
@@ -237,7 +193,18 @@ function App() {
                 (e.currentTarget.style.backgroundColor = "transparent")
               }
             >
-              ❓ Ver guía nuevamente
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  fill="currentColor"
+                  d="M11.95 18q.525 0 .888-.363t.362-.887t-.362-.888t-.888-.362t-.887.363t-.363.887t.363.888t.887.362m-.9-3.85h1.85q0-.825.188-1.3t1.062-1.3q.65-.65 1.025-1.238T15.55 8.9q0-1.4-1.025-2.15T12.1 6q-1.425 0-2.312.75T8.55 8.55l1.65.65q.125-.45.563-.975T12.1 7.7q.8 0 1.2.438t.4.962q0 .5-.3.938t-.75.812q-1.1.975-1.35 1.475t-.25 1.825M12 22q-2.075 0-3.9-.787t-3.175-2.138T2.788 15.9T2 12t.788-3.9t2.137-3.175T8.1 2.788T12 2t3.9.788t3.175 2.137T21.213 8.1T22 12t-.788 3.9t-2.137 3.175t-3.175 2.138T12 22m0-2q3.35 0 5.675-2.325T20 12t-2.325-5.675T12 4T6.325 6.325T4 12t2.325 5.675T12 20m0-8"
+                />
+              </svg>
+              Ayuda
             </button>
           </div>
 
@@ -283,7 +250,6 @@ function App() {
                   key={curso.id}
                   onClick={() => setCursoActivo(curso)}
                   className="bg-white p-5 rounded-xl shadow-sm border transition cursor-pointer flex justify-between items-start group"
-                  data-tour={cursos.length > 0 ? "grupo-card" : ""}
                   style={{ borderColor: "var(--color-warm-gray)" }}
                   onMouseOver={(e) => {
                     (e.currentTarget as HTMLElement).style.borderColor =

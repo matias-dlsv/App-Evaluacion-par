@@ -34,7 +34,7 @@ export function GrupoCard({
 }: GrupoCardProps) {
   return (
     <div
-      className="bg-white rounded-xl shadow border flex flex-col overflow-hidden"
+      className={`bg-white rounded-xl shadow border flex flex-col overflow-hidden transition-all ${editando ? "lg:col-span-2" : ""}`}
       style={{ borderColor: "var(--color-warm-gray)" }}
     >
       {/* Header del grupo */}
@@ -46,10 +46,12 @@ export function GrupoCard({
         }}
         onClick={() => !editando && onToggle()}
         onMouseOver={(e) => {
-          if (!editando) (e.currentTarget as HTMLElement).style.backgroundColor = "#FFF5F5";
+          if (!editando)
+            (e.currentTarget as HTMLElement).style.backgroundColor = "#FFF5F5";
         }}
         onMouseOut={(e) => {
-          if (!editando) (e.currentTarget as HTMLElement).style.backgroundColor = "";
+          if (!editando)
+            (e.currentTarget as HTMLElement).style.backgroundColor = "";
         }}
       >
         {!editando && (
@@ -64,12 +66,18 @@ export function GrupoCard({
             ▶
           </span>
         )}
-        <h4 className="font-bold text-lg flex-1" style={{ color: "var(--color-primary)" }}>
+        <h4
+          className="font-bold text-lg flex-1"
+          style={{ color: "var(--color-primary)" }}
+        >
           Grupo {grupo.numero}
         </h4>
 
         {!editando && (
-          <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="flex items-center gap-1.5"
+            onClick={(e) => e.stopPropagation()}
+          >
             <label
               className="text-[10px] font-bold uppercase whitespace-nowrap"
               style={{ color: "var(--color-blue-mid)" }}
@@ -79,11 +87,12 @@ export function GrupoCard({
             <input
               type="number"
               step="0.1"
+              data-tour="tour-nota-rapida"
               min="1"
               max="7"
               value={notaBrutaInput ?? grupo.promedio_bruto ?? ""}
               onChange={(e) => onSetNota(e.target.value)}
-              className="w-16 p-1.5 border rounded text-sm text-center outline-none font-semibold"
+              className="tour-nota-rapida w-16 p-1.5 border rounded text-sm text-center outline-none font-semibold" // <- Agregada aquí
               style={{
                 borderColor: "var(--color-warm-gray)",
                 color: "var(--color-navy)",
@@ -93,11 +102,15 @@ export function GrupoCard({
           </div>
         )}
 
-        <div className="flex items-center gap-1.5 ml-2" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="flex items-center gap-1.5 ml-2"
+          onClick={(e) => e.stopPropagation()}
+        >
           {!editando && (
             <button
               onClick={onAbrirEdicion}
-              className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold border rounded transition cursor-pointer"
+              data-tour="tour-btn-editar"
+              className="tour-btn-editar flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold border rounded transition cursor-pointer" // <- Agregada aquí
               style={{
                 backgroundColor: "#F3F0ED",
                 color: "var(--color-blue-mid)",
@@ -143,22 +156,49 @@ export function GrupoCard({
               >
                 <th className="text-left px-5 py-2">Alumno</th>
                 <th className="text-center px-3 py-2 whitespace-nowrap">
-                  Nota<br />Bruta
+                  Nota
+                  <br />
+                  Bruta
                 </th>
-                <th className="text-center px-3 py-2 whitespace-nowrap" style={{ color: "#16A34A" }}>
-                  Ev.<br />Par
+                <th
+                  className="text-center px-3 py-2 whitespace-nowrap"
+                  style={{ color: "#16A34A" }}
+                >
+                  Ev.
+                  <br />
+                  Par
                 </th>
-                <th className="text-center px-3 py-2 whitespace-nowrap" style={{ color: "var(--color-blue-mid)" }}>
-                  Auto<br />Eval.
+                <th
+                  className="text-center px-3 py-2 whitespace-nowrap"
+                  style={{ color: "var(--color-blue-mid)" }}
+                >
+                  Auto
+                  <br />
+                  Eval.
                 </th>
-                <th className="text-center px-3 py-2 whitespace-nowrap" style={{ color: "var(--color-primary-warm)" }}>
-                  Desc.<br />No Evaluó
+                <th
+                  className="text-center px-3 py-2 whitespace-nowrap"
+                  style={{ color: "var(--color-primary-warm)" }}
+                >
+                  Desc.
+                  <br />
+                  No Evaluó
                 </th>
-                <th className="text-center px-3 py-2 whitespace-nowrap" style={{ color: "var(--color-primary-mid)" }}>
-                  Desc.<br />Grupo Ajeno
+                <th
+                  className="text-center px-3 py-2 whitespace-nowrap"
+                  style={{ color: "var(--color-primary-mid)" }}
+                >
+                  Desc.
+                  <br />
+                  Grupo Ajeno
                 </th>
-                <th className="text-center px-3 py-2 whitespace-nowrap" style={{ color: "var(--color-primary)" }}>
-                  Nota<br />Final
+                <th
+                  className="text-center px-3 py-2 whitespace-nowrap"
+                  style={{ color: "var(--color-primary)" }}
+                >
+                  Nota
+                  <br />
+                  Final
                 </th>
               </tr>
             </thead>
@@ -169,7 +209,9 @@ export function GrupoCard({
                   className="border-b last:border-0"
                   style={{
                     borderColor: "#F3F0ED",
-                    backgroundColor: estudiantesDuplicados.has(est.identificacion)
+                    backgroundColor: estudiantesDuplicados.has(
+                      est.identificacion,
+                    )
                       ? "#FFFBEB"
                       : undefined,
                   }}
@@ -182,7 +224,10 @@ export function GrupoCard({
                     >
                       {est.identificacion}
                       {estudiantesDuplicados.has(est.identificacion) && (
-                        <span className="ml-1 text-[10px] font-bold" style={{ color: "#B45309" }}>
+                        <span
+                          className="ml-1 text-[10px] font-bold"
+                          style={{ color: "#B45309" }}
+                        >
                           ⚠
                         </span>
                       )}
@@ -191,7 +236,10 @@ export function GrupoCard({
                   <td className="px-3 py-2.5 text-center">
                     <span
                       className="font-semibold text-xs px-2 py-0.5 rounded"
-                      style={{ color: "var(--color-blue-mid)", backgroundColor: "#F3F0ED" }}
+                      style={{
+                        color: "var(--color-blue-mid)",
+                        backgroundColor: "#F3F0ED",
+                      }}
                     >
                       {grupo.promedio_bruto ?? "—"}
                     </span>
@@ -200,12 +248,21 @@ export function GrupoCard({
                     {est.notaPar !== undefined ? (
                       <span
                         className="font-bold text-xs px-2 py-0.5 rounded border"
-                        style={{ color: "#15803D", backgroundColor: "#F0FDF4", borderColor: "#BBF7D0" }}
+                        style={{
+                          color: "#15803D",
+                          backgroundColor: "#F0FDF4",
+                          borderColor: "#BBF7D0",
+                        }}
                       >
                         {est.notaPar}
                       </span>
                     ) : (
-                      <span className="text-xs" style={{ color: "var(--color-warm-gray)" }}>—</span>
+                      <span
+                        className="text-xs"
+                        style={{ color: "var(--color-warm-gray)" }}
+                      >
+                        —
+                      </span>
                     )}
                   </td>
                   <td className="px-3 py-2.5 text-center">
@@ -221,7 +278,12 @@ export function GrupoCard({
                         {est.notaAuto}
                       </span>
                     ) : (
-                      <span className="text-xs" style={{ color: "var(--color-warm-gray)" }}>—</span>
+                      <span
+                        className="text-xs"
+                        style={{ color: "var(--color-warm-gray)" }}
+                      >
+                        —
+                      </span>
                     )}
                   </td>
                   <td className="px-3 py-2.5 text-center">
@@ -230,7 +292,11 @@ export function GrupoCard({
                         className="text-xs font-semibold px-2 py-0.5 rounded"
                         style={
                           est.factorCastigoNoEvaluo > 0
-                            ? { color: "var(--color-primary-warm)", backgroundColor: "#FEF3EE", border: "1px solid #FBCAB4" }
+                            ? {
+                                color: "var(--color-primary-warm)",
+                                backgroundColor: "#FEF3EE",
+                                border: "1px solid #FBCAB4",
+                              }
                             : { color: "var(--color-warm-gray)" }
                         }
                       >
@@ -242,7 +308,12 @@ export function GrupoCard({
                         )}
                       </span>
                     ) : (
-                      <span className="text-xs" style={{ color: "var(--color-warm-gray)" }}>—</span>
+                      <span
+                        className="text-xs"
+                        style={{ color: "var(--color-warm-gray)" }}
+                      >
+                        —
+                      </span>
                     )}
                   </td>
                   <td className="px-3 py-2.5 text-center">
@@ -251,7 +322,11 @@ export function GrupoCard({
                         className="text-xs font-semibold px-2 py-0.5 rounded"
                         style={
                           est.factorCastigoFueraGrupo > 0
-                            ? { color: "var(--color-primary-mid)", backgroundColor: "#FEF2F2", border: "1px solid #FECACA" }
+                            ? {
+                                color: "var(--color-primary-mid)",
+                                backgroundColor: "#FEF2F2",
+                                border: "1px solid #FECACA",
+                              }
                             : { color: "var(--color-warm-gray)" }
                         }
                       >
@@ -263,7 +338,12 @@ export function GrupoCard({
                         )}
                       </span>
                     ) : (
-                      <span className="text-xs" style={{ color: "var(--color-warm-gray)" }}>—</span>
+                      <span
+                        className="text-xs"
+                        style={{ color: "var(--color-warm-gray)" }}
+                      >
+                        —
+                      </span>
                     )}
                   </td>
                   <td className="px-3 py-2.5 text-center">
@@ -275,7 +355,12 @@ export function GrupoCard({
                         {est.notaConDescuento}
                       </span>
                     ) : (
-                      <span className="text-xs" style={{ color: "var(--color-warm-gray)" }}>—</span>
+                      <span
+                        className="text-xs"
+                        style={{ color: "var(--color-warm-gray)" }}
+                      >
+                        —
+                      </span>
                     )}
                   </td>
                 </tr>
