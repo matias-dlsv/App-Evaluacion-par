@@ -2,12 +2,17 @@
 import { useState, useEffect, useRef } from "react";
 import { open, confirm } from "@tauri-apps/plugin-dialog";
 import { load } from "@tauri-apps/plugin-store";
+import { Joyride } from "react-joyride";
 import logoUandes from "./assets/logo-uandes.png";
 import "./App.css";
 import { Curso, Evaluacion, migrarCurso } from "./utils/notas";
 import { useAppStore } from "./store/appStore";
 import { procesarArchivoEvaluacion } from "./utils/helpers";
 import { CursoView } from "./components/CursoView";
+import { useTour } from "./hooks/useTour";
+import { tourSteps } from "./config/tourSteps";
+
+const JoyrideAny = Joyride as any;
 
 function App() {
   const { cursos, agregarCurso, eliminarCurso, setCursos } = useAppStore();
@@ -16,6 +21,9 @@ function App() {
   const [estadoCarga, setEstadoCarga] = useState("");
   const [evalActivaId] = useState<Record<string, string>>({});
   const storeRef = useRef<Awaited<ReturnType<typeof load>> | null>(null);
+
+  const { tourEnabled, tourIndex, handleTourCallback, reiniciarTour } =
+    useTour();
 
   // ─── Store ──────────────────────────────────────────────────────────────────
 
@@ -100,201 +108,268 @@ function App() {
   // ─── Vista principal (lista de cursos) ───────────────────────────────────────
 
   return (
-    <div
-      className="flex h-screen font-sans"
-      style={{ backgroundColor: "#F7F5F3", color: "var(--color-navy)" }}
-    >
-      {/* Sidebar */}
-      <div
-        className="w-1/3 p-8 shadow-lg flex flex-col gap-6 z-10 text-white border-r"
-        style={{
-          background: `linear-gradient(180deg, var(--color-primary) 0%, var(--color-primary-dark) 100%)`,
-          borderColor: "var(--color-primary-dark)",
+    <>
+      <JoyrideAny
+        steps={tourSteps}
+        run={tourEnabled}
+        stepIndex={tourIndex}
+        callback={handleTourCallback}
+        continuous
+        showSkipButton
+        styles={{
+          primaryColor: "#ce0019",
+          textColor: "#333",
+          backgroundColor: "#fff",
+          overlayColor: "rgba(0, 0, 0, 0.5)",
+          borderRadius: 8,
+          tooltip: {
+            borderRadius: 8,
+            padding: 16,
+            boxShadow: "0 4px 12px rgba(206, 0, 25, 0.2)",
+          },
+          buttonNext: {
+            backgroundColor: "#ce0019",
+            color: "white",
+            borderRadius: 6,
+            padding: "8px 16px",
+            border: "none",
+            cursor: "pointer",
+            fontWeight: "600",
+          },
+          buttonBack: {
+            color: "#ce0019",
+            marginRight: "8px",
+            fontWeight: "600",
+          },
+          buttonSkip: {
+            color: "#ce0019",
+            fontWeight: "600",
+          },
         }}
-      >
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2 mb-1">
-            <img
-              src={logoUandes}
-              alt="Universidad de los Andes"
-              className="h-20 w-auto"
-            />
-          </div>
-          <h1 className="text-4xl font-extrabold tracking-tight text-white">
-            EquiPar
-          </h1>
-          <p className="text-sm font-medium" style={{ color: "#FFAAAA" }}>
-            Plataforma de Evaluación Par
-          </p>
-        </div>
+        locale={{
+          back: "← Atrás",
+          close: "Cerrar",
+          last: "Finalizar",
+          next: "Siguiente →",
+          skip: "Saltar tour",
+        }}
+      />
 
-        <div className="flex flex-col gap-4 mt-4">
-          <h2
-            className="text-xl font-semibold border-b pb-2 text-white"
-            style={{ borderColor: "rgba(255,255,255,0.3)" }}
-          >
-            Nuevo Curso
-          </h2>
-          <input
-            type="text"
-            value={nombreCurso}
-            onChange={(e) => setNombreCurso(e.target.value)}
-            placeholder="Ej: Neuromecánica..."
-            className="p-2 border rounded outline-none"
-            style={{
-              backgroundColor: "rgba(255,255,255,0.12)",
-              color: "white",
-              borderColor: "rgba(255,255,255,0.3)",
-            }}
-          />
-          <button
-            onClick={crearCurso}
-            className="mt-2 px-4 py-3 bg-white font-bold rounded transition cursor-pointer shadow"
-            style={{ color: "var(--color-primary)" }}
-            onMouseOver={(e) =>
-              (e.currentTarget.style.backgroundColor = "#FFF5F5")
-            }
-            onMouseOut={(e) =>
-              (e.currentTarget.style.backgroundColor = "white")
-            }
-          >
-            Subir Excel de Evaluación Par
-          </button>
-          {estadoCarga && (
-            <p
-              className="text-sm text-center mt-2"
-              style={{ color: "#FFAAAA" }}
-            >
-              {estadoCarga}
-            </p>
-          )}
-        </div>
-
-        <div
-          className="mt-auto pt-6 border-t"
-          style={{ borderColor: "rgba(255,255,255,0.25)" }}
-        >
-          <p
-            className="text-[10px] text-center leading-relaxed"
-            style={{ color: "rgba(255,255,255,0.6)" }}
-          >
-            <span className="font-semibold text-white">
-              Universidad de los Andes
-            </span>
-          </p>
-        </div>
-      </div>
-
-      {/* Lista de cursos */}
       <div
-        className="w-2/3 p-8 overflow-y-auto"
-        style={{ backgroundColor: "#F7F5F3" }}
+        className="flex h-screen font-sans"
+        style={{ backgroundColor: "#F7F5F3", color: "var(--color-navy)" }}
       >
-        <h2
-          className="text-2xl font-bold mb-6"
-          style={{ color: "var(--color-primary)" }}
+        {/* Sidebar */}
+        <div
+          className="w-1/3 p-8 shadow-lg flex flex-col gap-6 z-10 text-white border-r"
+          style={{
+            background: `linear-gradient(180deg, var(--color-primary) 0%, var(--color-primary-dark) 100%)`,
+            borderColor: "var(--color-primary-dark)",
+          }}
         >
-          Cursos Creados
-        </h2>
-        <div className="grid grid-cols-1 gap-4">
-          {cursos.map((curso) => {
-            const evalParaBadge =
-              evalActivaId[curso.id] && evalActivaId[curso.id] !== "seguimiento"
-                ? (curso.evaluaciones.find(
-                    (e) => e.id === evalActivaId[curso.id],
-                  ) ?? curso.evaluaciones[0])
-                : curso.evaluaciones[0];
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2 mb-1">
+              <img
+                src={logoUandes}
+                alt="Universidad de los Andes"
+                className="h-20 w-auto"
+              />
+            </div>
+            <h1 className="text-4xl font-extrabold tracking-tight text-white">
+              EquiPar
+            </h1>
+            <p className="text-sm font-medium" style={{ color: "#FFAAAA" }}>
+              Plataforma de Evaluación Par
+            </p>
+          </div>
 
-            return (
-              <div
-                key={curso.id}
-                onClick={() => setCursoActivo(curso)}
-                className="bg-white p-5 rounded-xl shadow-sm border transition cursor-pointer flex justify-between items-start group"
-                style={{ borderColor: "var(--color-warm-gray)" }}
-                onMouseOver={(e) => {
-                  (e.currentTarget as HTMLElement).style.borderColor =
-                    "var(--color-primary)";
-                  (e.currentTarget as HTMLElement).style.boxShadow =
-                    "0 4px 12px rgba(206,0,25,0.08)";
-                }}
-                onMouseOut={(e) => {
-                  (e.currentTarget as HTMLElement).style.borderColor =
-                    "var(--color-warm-gray)";
-                  (e.currentTarget as HTMLElement).style.boxShadow = "";
-                }}
+          <div className="flex flex-col gap-4 mt-4">
+            <h2
+              className="text-xl font-semibold border-b pb-2 text-white"
+              style={{ borderColor: "rgba(255,255,255,0.3)" }}
+            >
+              Nuevo Curso
+            </h2>
+            <input
+              type="text"
+              value={nombreCurso}
+              onChange={(e) => setNombreCurso(e.target.value)}
+              placeholder="Ej: Neuromecánica..."
+              className="p-2 border rounded outline-none"
+              data-tour="input-nombre-curso"
+              style={{
+                backgroundColor: "rgba(255,255,255,0.12)",
+                color: "white",
+                borderColor: "rgba(255,255,255,0.3)",
+              }}
+            />
+            <button
+              onClick={crearCurso}
+              className="mt-2 px-4 py-3 bg-white font-bold rounded transition cursor-pointer shadow"
+              data-tour="btn-subir-excel"
+              style={{ color: "var(--color-primary)" }}
+              onMouseOver={(e) =>
+                (e.currentTarget.style.backgroundColor = "#FFF5F5")
+              }
+              onMouseOut={(e) =>
+                (e.currentTarget.style.backgroundColor = "white")
+              }
+            >
+              Subir Excel de Evaluación Par
+            </button>
+            {estadoCarga && (
+              <p
+                className="text-sm text-center mt-2"
+                style={{ color: "#FFAAAA" }}
               >
-                <div className="flex flex-col gap-2">
-                  <h3
-                    className="text-xl font-bold"
-                    style={{ color: "var(--color-navy)" }}
-                  >
-                    {curso.nombre}
-                  </h3>
-                  {curso.evaluaciones.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {curso.evaluaciones.map((ev) => (
-                        <span
-                          key={ev.id}
-                          className="text-[10px] px-2 py-0.5 rounded-full font-medium"
-                          style={{
-                            backgroundColor: "#FFF5F5",
-                            color: "var(--color-primary)",
-                            border: "1px solid #FECDD3",
-                          }}
-                        >
-                          {ev.nombre}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-center gap-2 shrink-0 ml-4">
-                  <span
-                    className="text-sm py-1 px-3 rounded-full border whitespace-nowrap"
-                    style={{
-                      color: "var(--color-primary)",
-                      backgroundColor: "#FFF5F5",
-                      borderColor: "#FECDD3",
-                    }}
-                  >
-                    {evalParaBadge
-                      ? `${evalParaBadge.grupos.length} grupos →`
-                      : "0 grupos →"}
-                  </span>
-                  <button
-                    onClick={(e) => handleEliminarCurso(e, curso.id)}
-                    title="Eliminar curso"
-                    className="flex items-center justify-center w-7 h-7 rounded-full transition cursor-pointer"
-                    style={{ color: "var(--color-warm-gray)" }}
-                    onMouseOver={(e) => {
-                      (e.currentTarget as HTMLElement).style.backgroundColor =
-                        "#FEE2E2";
-                      (e.currentTarget as HTMLElement).style.color =
-                        "var(--color-primary)";
-                    }}
-                    onMouseOut={(e) => {
-                      (e.currentTarget as HTMLElement).style.backgroundColor =
-                        "";
-                      (e.currentTarget as HTMLElement).style.color =
-                        "var(--color-warm-gray)";
-                    }}
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 16 16"
-                      fill="currentColor"
-                      className="w-4 h-4"
+                {estadoCarga}
+              </p>
+            )}
+            <button
+              onClick={reiniciarTour}
+              className="mt-4 px-4 py-2 bg-transparent font-medium rounded transition cursor-pointer text-white text-sm border border-white"
+              data-tour="btn-reiniciar-tour"
+              onMouseOver={(e) =>
+                (e.currentTarget.style.backgroundColor =
+                  "rgba(255,255,255,0.1)")
+              }
+              onMouseOut={(e) =>
+                (e.currentTarget.style.backgroundColor = "transparent")
+              }
+            >
+              ❓ Ver guía nuevamente
+            </button>
+          </div>
+
+          <div
+            className="mt-auto pt-6 border-t"
+            style={{ borderColor: "rgba(255,255,255,0.25)" }}
+          >
+            <p
+              className="text-[10px] text-center leading-relaxed"
+              style={{ color: "rgba(255,255,255,0.6)" }}
+            >
+              <span className="font-semibold text-white">
+                Universidad de los Andes
+              </span>
+            </p>
+          </div>
+        </div>
+
+        {/* Lista de cursos */}
+        <div
+          className="w-2/3 p-8 overflow-y-auto"
+          style={{ backgroundColor: "#F7F5F3" }}
+          data-tour="lista-cursos"
+        >
+          <h2
+            className="text-2xl font-bold mb-6"
+            style={{ color: "var(--color-primary)" }}
+          >
+            Cursos Creados
+          </h2>
+          <div className="grid grid-cols-1 gap-4">
+            {cursos.map((curso) => {
+              const evalParaBadge =
+                evalActivaId[curso.id] &&
+                evalActivaId[curso.id] !== "seguimiento"
+                  ? (curso.evaluaciones.find(
+                      (e) => e.id === evalActivaId[curso.id],
+                    ) ?? curso.evaluaciones[0])
+                  : curso.evaluaciones[0];
+
+              return (
+                <div
+                  key={curso.id}
+                  onClick={() => setCursoActivo(curso)}
+                  className="bg-white p-5 rounded-xl shadow-sm border transition cursor-pointer flex justify-between items-start group"
+                  data-tour={cursos.length > 0 ? "grupo-card" : ""}
+                  style={{ borderColor: "var(--color-warm-gray)" }}
+                  onMouseOver={(e) => {
+                    (e.currentTarget as HTMLElement).style.borderColor =
+                      "var(--color-primary)";
+                    (e.currentTarget as HTMLElement).style.boxShadow =
+                      "0 4px 12px rgba(206,0,25,0.08)";
+                  }}
+                  onMouseOut={(e) => {
+                    (e.currentTarget as HTMLElement).style.borderColor =
+                      "var(--color-warm-gray)";
+                    (e.currentTarget as HTMLElement).style.boxShadow = "";
+                  }}
+                >
+                  <div className="flex flex-col gap-2">
+                    <h3
+                      className="text-xl font-bold"
+                      style={{ color: "var(--color-navy)" }}
                     >
-                      <path d="M5.28 4.22a.75.75 0 0 0-1.06 1.06L6.94 8l-2.72 2.72a.75.75 0 1 0 1.06 1.06L8 9.06l2.72 2.72a.75.75 0 1 0 1.06-1.06L9.06 8l2.72-2.72a.75.75 0 0 0-1.06-1.06L8 6.94 5.28 4.22Z" />
-                    </svg>
-                  </button>
+                      {curso.nombre}
+                    </h3>
+                    {curso.evaluaciones.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {curso.evaluaciones.map((ev) => (
+                          <span
+                            key={ev.id}
+                            className="text-[10px] px-2 py-0.5 rounded-full font-medium"
+                            style={{
+                              backgroundColor: "#FFF5F5",
+                              color: "var(--color-primary)",
+                              border: "1px solid #FECDD3",
+                            }}
+                          >
+                            {ev.nombre}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 ml-4">
+                    <span
+                      className="text-sm py-1 px-3 rounded-full border whitespace-nowrap"
+                      style={{
+                        color: "var(--color-primary)",
+                        backgroundColor: "#FFF5F5",
+                        borderColor: "#FECDD3",
+                      }}
+                    >
+                      {evalParaBadge
+                        ? `${evalParaBadge.grupos.length} grupos →`
+                        : "0 grupos →"}
+                    </span>
+                    <button
+                      onClick={(e) => handleEliminarCurso(e, curso.id)}
+                      title="Eliminar curso"
+                      className="flex items-center justify-center w-7 h-7 rounded-full transition cursor-pointer"
+                      style={{ color: "var(--color-warm-gray)" }}
+                      onMouseOver={(e) => {
+                        (e.currentTarget as HTMLElement).style.backgroundColor =
+                          "#FEE2E2";
+                        (e.currentTarget as HTMLElement).style.color =
+                          "var(--color-primary)";
+                      }}
+                      onMouseOut={(e) => {
+                        (e.currentTarget as HTMLElement).style.backgroundColor =
+                          "";
+                        (e.currentTarget as HTMLElement).style.color =
+                          "var(--color-warm-gray)";
+                      }}
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 16 16"
+                        fill="currentColor"
+                        className="w-4 h-4"
+                      >
+                        <path d="M5.28 4.22a.75.75 0 0 0-1.06 1.06L6.94 8l-2.72 2.72a.75.75 0 1 0 1.06 1.06L8 9.06l2.72 2.72a.75.75 0 1 0 1.06-1.06L9.06 8l2.72-2.72a.75.75 0 0 0-1.06-1.06L8 6.94 5.28 4.22Z" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
 
