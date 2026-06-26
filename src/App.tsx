@@ -12,8 +12,8 @@ import { useTourInicio } from "./hooks/useTour";
 import { tourStepsInicio } from "./config/tourSteps";
 import { SimpleTour } from "./components/SimpleTour";
 
+import { resolveResource } from "@tauri-apps/api/path";
 import { readFile } from "@tauri-apps/plugin-fs";
-import { resourceDir } from "@tauri-apps/api/path";
 
 function App() {
   const { cursos, agregarCurso, eliminarCurso, setCursos } = useAppStore();
@@ -52,12 +52,12 @@ function App() {
     } else {
       (async () => {
         try {
-          const dir = await resourceDir();
-          const path = `${dir}resources\\videos\\Tutorial.webm`;
-          const bytes = await readFile(path);
+          const resourcePath = await resolveResource(
+            "resources/videos/Tutorial.webm",
+          );
+          const bytes = await readFile(resourcePath);
           const blob = new Blob([bytes], { type: "video/webm" });
-          const url = URL.createObjectURL(blob);
-          setVideoSrc(url);
+          setVideoSrc(URL.createObjectURL(blob));
         } catch (e) {
           console.error("Error cargando video:", e);
         }

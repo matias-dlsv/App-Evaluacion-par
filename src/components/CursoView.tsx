@@ -35,8 +35,8 @@ import { CSS } from "@dnd-kit/utilities";
 import { useTourCurso } from "../hooks/useTour";
 import { SimpleTour } from "./SimpleTour";
 import { tourStepsCurso } from "../config/tourSteps";
+import { resolveResource } from "@tauri-apps/api/path";
 import { readFile } from "@tauri-apps/plugin-fs";
-import { resourceDir } from "@tauri-apps/api/path";
 
 interface CursoViewProps {
   cursoActivo: Curso;
@@ -296,12 +296,12 @@ export function CursoView({
     } else {
       (async () => {
         try {
-          const dir = await resourceDir();
-          const path = `${dir}resources\\videos\\Tutorial.webm`;
-          const bytes = await readFile(path);
+          const resourcePath = await resolveResource(
+            "resources/videos/Tutorial.webm",
+          );
+          const bytes = await readFile(resourcePath);
           const blob = new Blob([bytes], { type: "video/webm" });
-          const url = URL.createObjectURL(blob);
-          setVideoSrc(url);
+          setVideoSrc(URL.createObjectURL(blob));
         } catch (e) {
           console.error("Error cargando video:", e);
         }

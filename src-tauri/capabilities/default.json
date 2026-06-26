@@ -11,7 +11,8 @@
     "dialog:allow-open",
     "dialog:allow-save",
     "fs:default",
-    "fs:read-all",
+    "fs:allow-read-file",
+    "fs:allow-resource-read-recursive",
     "fs:write-all",
     "fs:allow-mkdir",
     "fs:allow-write-file",
@@ -19,13 +20,27 @@
     {
       "identifier": "fs:scope",
       "allow": [
-        { "path": "$HOME/**" },
-        { "path": "$DESKTOP/**" },
-        { "path": "$DOCUMENT/**" },
-        { "path": "$DOWNLOAD/**" },
-        { "path": "$APPDATA/**" },
-        { "path": "$TEMP/**" },
-        { "path": "$RESOURCE/**" }
+        {
+          "path": "$HOME/**"
+        },
+        {
+          "path": "$DESKTOP/**"
+        },
+        {
+          "path": "$DOCUMENT/**"
+        },
+        {
+          "path": "$DOWNLOAD/**"
+        },
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$TEMP/**"
+        },
+        {
+          "path": "$RESOURCE/**"
+        }
       ]
     }
   ]
