@@ -11,6 +11,7 @@
     "dialog:allow-open",
     "dialog:allow-save",
     "fs:default",
+    "fs:read-all",
     "fs:write-all",
     "fs:allow-mkdir",
     "fs:allow-write-file",
@@ -23,7 +24,8 @@
         { "path": "$DOCUMENT/**" },
         { "path": "$DOWNLOAD/**" },
         { "path": "$APPDATA/**" },
-        { "path": "$TEMP/**" }
+        { "path": "$TEMP/**" },
+        { "path": "$RESOURCE/**" }
       ]
     }
   ]
