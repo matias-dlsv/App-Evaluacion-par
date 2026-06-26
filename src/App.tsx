@@ -12,13 +12,17 @@ import { useTourInicio } from "./hooks/useTour";
 import { tourStepsInicio } from "./config/tourSteps";
 import { SimpleTour } from "./components/SimpleTour";
 
+import { resourceDir } from "@tauri-apps/api/path";
+
 function App() {
   const { cursos, agregarCurso, eliminarCurso, setCursos } = useAppStore();
   const [cursoActivo, setCursoActivo] = useState<Curso | null>(null);
   const [nombreCurso, setNombreCurso] = useState("");
   const [estadoCarga, setEstadoCarga] = useState("");
   const [evalActivaId] = useState<Record<string, string>>({});
+  const [mostrarVideo, setMostrarVideo] = useState(false);
   const storeRef = useRef<Awaited<ReturnType<typeof load>> | null>(null);
+  const [videoSrc, setVideoSrc] = useState("");
 
   const { tourEnabled, completarTour, reiniciarTour } = useTourInicio();
 
@@ -38,7 +42,20 @@ function App() {
       }
     })();
   }, []);
-
+  useEffect(() => {
+    const isDev = window.location.hostname === "localhost";
+    if (isDev) {
+      setVideoSrc("/videos/Tutorial.webm");
+    } else {
+      (async () => {
+        const dir = await resourceDir();
+        const url =
+          "asset://localhost/" +
+          `${dir}/videos/Tutorial.webm`.replace(/^\//, "");
+        setVideoSrc(url);
+      })();
+    }
+  }, []);
   const guardarEnStore = (lista: Curso[]) => {
     storeRef.current?.set("cursos", lista);
   };
@@ -111,6 +128,31 @@ function App() {
         run={tourEnabled}
         onFinish={completarTour}
       />
+      {mostrarVideo && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ backgroundColor: "rgba(0,0,0,0.7)" }}
+          onClick={() => setMostrarVideo(false)}
+        >
+          <div
+            className="relative rounded-xl overflow-hidden shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <video width="800" height="450" controls autoPlay>
+              <source
+                src={videoSrc.replace(".mp4", ".webm")}
+                type="video/webm"
+              />
+            </video>
+            <button
+              onClick={() => setMostrarVideo(false)}
+              className="absolute top-2 right-2 bg-black text-white rounded-full w-8 h-8"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
 
       <div
         className="flex h-screen font-sans"
@@ -205,6 +247,31 @@ function App() {
                 />
               </svg>
               Ayuda
+            </button>
+
+            <button
+              onClick={() => setMostrarVideo(true)}
+              className="mt-4 self-start px-3 py-1.5 bg-transparent font-medium rounded transition cursor-pointer text-white text-sm border border-white flex items-center gap-1.5"
+              onMouseOver={(e) =>
+                (e.currentTarget.style.backgroundColor =
+                  "rgba(255,255,255,0.1)")
+              }
+              onMouseOut={(e) =>
+                (e.currentTarget.style.backgroundColor = "transparent")
+              }
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  fill="currentColor"
+                  d="M11.95 18q.525 0 .888-.363t.362-.887t-.362-.888t-.888-.362t-.887.363t-.363.887t.363.888t.887.362m-.9-3.85h1.85q0-.825.188-1.3t1.062-1.3q.65-.65 1.025-1.238T15.55 8.9q0-1.4-1.025-2.15T12.1 6q-1.425 0-2.312.75T8.55 8.55l1.65.65q.125-.45.563-.975T12.1 7.7q.8 0 1.2.438t.4.962q0 .5-.3.938t-.75.812q-1.1.975-1.35 1.475t-.25 1.825M12 22q-2.075 0-3.9-.787t-3.175-2.138T2.788 15.9T2 12t.788-3.9t2.137-3.175T8.1 2.788T12 2t3.9.788t3.175 2.137T21.213 8.1T22 12t-.788 3.9t-2.137 3.175t-3.175 2.138T12 22m0-2q3.35 0 5.675-2.325T20 12t-2.325-5.675T12 4T6.325 6.325T4 12t2.325 5.675T12 20m0-8"
+                />
+              </svg>
+              Video tutorial
             </button>
           </div>
 
