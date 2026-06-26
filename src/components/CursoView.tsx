@@ -35,7 +35,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { useTourCurso } from "../hooks/useTour";
 import { SimpleTour } from "./SimpleTour";
 import { tourStepsCurso } from "../config/tourSteps";
-import {resolveResource } from "@tauri-apps/api/path";
+import { resourceDir } from "@tauri-apps/api/path";
 
 interface CursoViewProps {
   cursoActivo: Curso;
@@ -294,9 +294,11 @@ export function CursoView({
       setVideoSrc("/videos/Tutorial.webm");
     } else {
       (async () => {
-        const resourcePath = await resolveResource("videos/Tutorial.webm");
-        const normalized = resourcePath.replace(/\\/g, "/").replace(/\/$/, "");
-        setVideoSrc(`https://asset.localhost/${normalized}`);
+        const dir = await resourceDir();
+        const normalized = dir.replace(/\\/g, "/").replace(/\/$/, "");
+        setVideoSrc(
+          `https://asset.localhost/${normalized}/resources/videos/Tutorial.webm`,
+        );
       })();
     }
   }, []);

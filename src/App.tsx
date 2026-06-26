@@ -12,7 +12,7 @@ import { useTourInicio } from "./hooks/useTour";
 import { tourStepsInicio } from "./config/tourSteps";
 import { SimpleTour } from "./components/SimpleTour";
 
-import { resolveResource } from "@tauri-apps/api/path";
+import { resourceDir } from "@tauri-apps/api/path";
 
 function App() {
   const { cursos, agregarCurso, eliminarCurso, setCursos } = useAppStore();
@@ -50,9 +50,11 @@ function App() {
       setVideoSrc("/videos/Tutorial.webm");
     } else {
       (async () => {
-        const resourcePath = await resolveResource("videos/Tutorial.webm");
-        const normalized = resourcePath.replace(/\\/g, "/").replace(/\/$/, "");
-        setVideoSrc(`https://asset.localhost/${normalized}`);
+        const dir = await resourceDir();
+        const normalized = dir.replace(/\\/g, "/").replace(/\/$/, "");
+        setVideoSrc(
+          `https://asset.localhost/${normalized}/resources/videos/Tutorial.webm`,
+        );
       })();
     }
   }, []);
