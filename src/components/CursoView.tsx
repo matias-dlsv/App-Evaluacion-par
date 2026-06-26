@@ -708,7 +708,7 @@ export function CursoView({
                       className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 first:rounded-t last:rounded-b transition"
                       style={{ color: "var(--color-navy)" }}
                     >
-                      Iniciar Tour
+                      Mostrarme cómo funciona
                     </button>
                     <div
                       style={{ height: "1px", backgroundColor: "#E5E5E5" }}
