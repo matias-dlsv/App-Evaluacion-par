@@ -20,7 +20,7 @@
       "csp": null,
       "assetProtocol": {
       "enable": true,
-      "scope": ["$HOME/**", "/home/**", "/tmp/**", "**"]
+      "scope": ["$RESOURCE/**", "$HOME/**", "/home/**", "/tmp/**", "**"]
     }
     }
   },

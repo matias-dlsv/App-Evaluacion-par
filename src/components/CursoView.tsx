@@ -295,10 +295,10 @@ export function CursoView({
     } else {
       (async () => {
         const dir = await resourceDir();
-        const url =
-          "asset://localhost/" +
-          `${dir}/videos/Tutorial.webm`.replace(/^\//, "");
-        setVideoSrc(url);
+        const normalized = dir.replace(/\\/g, "/").replace(/\/$/, "");
+        setVideoSrc(
+          `https://asset.localhost/${normalized}/videos/Tutorial.webm`,
+        );
       })();
     }
   }, []);
