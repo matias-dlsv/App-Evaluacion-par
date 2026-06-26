@@ -295,7 +295,9 @@ export function CursoView({
     } else {
       (async () => {
         const dir = await resourceDir();
-        const normalized = dir.replace(/\\/g, "/").replace(/\/$/, "");
+        let normalized = dir.replace(/\\/g, "/").replace(/\/$/, "");
+        // Solo en Windows: encode el C: del drive
+        normalized = normalized.replace(/^([A-Za-z]):/, (_, d) => `${d}%3A`);
         setVideoSrc(
           `https://asset.localhost/${normalized}/resources/videos/Tutorial.webm`,
         );
