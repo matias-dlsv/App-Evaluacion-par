@@ -1,9 +1,13 @@
 # EquiPar
-**Plataforma de Evaluación Par - Universidad de los Andes**
+
+<p align="center">
+  <img src="Logo.png" alt="EquiPar" width="500">
+</p>
 
 EquiPar es una aplicación de escritorio para gestionar y calcular notas de evaluación entre pares en cursos universitarios. Permite cargar respuestas desde Excel o CSV, calcular notas ajustadas con penalizaciones configurables, y exportar resultados por grupo o curso completo.
 
 ---
+
 ## 🎬 Tutorial de uso
 
 [![Tutorial EquiPar](https://img.youtube.com/vi/5HLU65buEAU/maxresdefault.jpg)](https://youtu.be/5HLU65buEAU)
@@ -14,13 +18,13 @@ EquiPar es una aplicación de escritorio para gestionar y calcular notas de eval
 
 Descarga el instalador correspondiente a tu sistema operativo desde la sección [Releases](../../releases):
 
-| Sistema | Archivo |
-|---------|---------|
-| 🪟 Windows | `EquiPar_x.x.x_x64-setup.exe` |
-| 🍎 Mac Apple Silicon (M1/M2/M3) | `EquiPar_x.x.x_aarch64.dmg` |
-| 🍎 Mac Intel (pre-2020) | `EquiPar_x.x.x_x64.dmg` |
-| 🐧 Linux (AppImage) | `EquiPar_x.x.x_amd64.AppImage` |
-| 🐧 Linux (Debian/Ubuntu) | `EquiPar_x.x.x_amd64.deb` |
+| Sistema                         | Archivo                        |
+| ------------------------------- | ------------------------------ |
+| 🪟 Windows                      | `EquiPar_x.x.x_x64-setup.exe`  |
+| 🍎 Mac Apple Silicon (M1/M2/M3) | `EquiPar_x.x.x_aarch64.dmg`    |
+| 🍎 Mac Intel (pre-2020)         | `EquiPar_x.x.x_x64.dmg`        |
+| 🐧 Linux (AppImage)             | `EquiPar_x.x.x_amd64.AppImage` |
+| 🐧 Linux (Debian/Ubuntu)        | `EquiPar_x.x.x_amd64.deb`      |
 
 ---
 
@@ -107,22 +111,22 @@ Tienes dos opciones según tu preferencia:
   - Un archivo por grupo
   - Todos los grupos en una carpeta
   - Comparativa autoevaluación vs nota par, ordenada por mayor discrepancia
-  - Seguimiento de estudiantes a través de varias evaluaciones. 
+  - Seguimiento de estudiantes a través de varias evaluaciones.
 - **Persistencia local** — Los cursos se guardan automáticamente entre sesiones
 
 ---
 
 ## Tecnologías
 
-| Capa | Tecnología |
-|------|-----------|
+| Capa                    | Tecnología                                   |
+| ----------------------- | -------------------------------------------- |
 | Framework de escritorio | [Tauri](https://tauri.app/) (Rust + WebView) |
-| Frontend | React 18 + TypeScript |
-| Estilos | Tailwind CSS |
-| Estado global | Zustand |
-| Persistencia | `@tauri-apps/plugin-store` |
-| Exportación Excel | ExcelJS |
-| Backend (procesamiento) | Rust |
+| Frontend                | React 18 + TypeScript                        |
+| Estilos                 | Tailwind CSS                                 |
+| Estado global           | Zustand                                      |
+| Persistencia            | `@tauri-apps/plugin-store`                   |
+| Exportación Excel       | ExcelJS                                      |
+| Backend (procesamiento) | Rust                                         |
 
 ---
 
