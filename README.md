@@ -6,6 +6,8 @@
 
 EquiPar es una aplicación de escritorio para gestionar y calcular notas de evaluación entre pares en cursos universitarios. Permite cargar respuestas desde Excel o CSV, calcular notas ajustadas con penalizaciones configurables, y exportar resultados por grupo o curso completo.
 
+También disponible para descarga a través de [Microsoft Store](https://apps.microsoft.com/detail/9NTTXD0FX0QZ?hl=es&gl=CL&ocid=pdpshare)
+
 ---
 
 ## 🎬 Tutorial de uso
